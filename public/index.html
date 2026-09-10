@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>S-Drive</title>
+<style>
+*{box-sizing:border-box}
+body{
+margin:0;
+font-family:Arial,sans-serif;
+background:#071a2d;
+color:white;
+min-height:100vh;
+display:flex;
+align-items:center;
+justify-content:center;
+}
+.box{
+width:90%;
+max-width:420px;
+background:#123252;
+padding:30px 20px;
+border-radius:24px;
+text-align:center;
+}
+h1{font-size:32px;margin-bottom:10px}
+p{color:#b9c7d6}
+input{
+width:100%;
+padding:16px;
+margin:8px 0;
+border-radius:12px;
+border:1px solid #315579;
+background:#09233c;
+color:white;
+font-size:16px;
+}
+button{
+width:100%;
+padding:16px;
+margin-top:12px;
+border:0;
+border-radius:12px;
+background:#08b9ef;
+font-size:17px;
+font-weight:bold;
+cursor:pointer;
+}
+#msg{margin-top:15px}
+</style>
+</head>
+<body>
+
+<div class="box">
+<h1>⚽ S-Drive</h1>
+<p>Application d'analyse des matchs et coupons du jour.</p>
+
+<input id="phone" type="text" placeholder="Numéro de téléphone">
+<input id="password" type="password" placeholder="Mot de passe">
+
+<button onclick="connexion()">Se connecter</button>
+
+<div id="msg"></div>
+</div>
+
+<script>
+async function connexion(){
+const phone=document.getElementById("phone").value.trim();
+const password=document.getElementById("password").value;
+const msg=document.getElementById("msg");
+
+if(!phone||!password){
+msg.textContent="Veuillez remplir tous les champs.";
+return;
+}
+
+msg.textContent="Connexion...";
+
+try{
+const r=await fetch("/api/login",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({phone,password})
+});
+
+const data=await r.json();
+
+if(r.ok){
+msg.textContent="Connexion réussie !";
+setTimeout(()=>location.href="/",800);
+}else{
+msg.textContent=data.error||"Identifiants incorrects.";
+}
+}catch(e){
+msg.textContent="Erreur de connexion au serveur.";
+}
+}
+</script>
+
+</body>
+</html>
