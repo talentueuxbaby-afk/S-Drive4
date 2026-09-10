@@ -1,3 +1,25 @@
+Oui. On va repartir proprement avec un seul code complet server.js, prêt à copier-coller.
+J’ai intégré :
+✅ Connexion / inscription
+✅ Mot de passe oublié
+✅ Logo S-Drive en haut
+✅ Petit écran de chargement après inscription/connexion
+✅ WhatsApp avec message automatique prérempli
+✅ Telegram avec message préparé
+✅ Création d’une demande d’analyse
+✅ Cote 2 / Cote 10
+✅ Paiement Wave
+✅ Section Bookmakers uniquement : 1Win, Paripesa et Loto
+✅ Groupe WhatsApp
+✅ Groupe Telegram
+✅ TikTok et Facebook séparément
+✅ Partage de l'application
+✅ Déconnexion
+✅ Base SQLite
+✅ Sessions utilisateurs
+✅ Mots de passe sécurisés avec bcrypt
+✅ Les liens sont centralisés au début du fichier pour pouvoir les modifier facilement
+Important : remplace tout le contenu actuel de ton server.js par le code ci-dessous. Ne colle rien avant ni après.
 const express = require("express");
 const session = require("express-session");
 const bcrypt = require("bcryptjs");
@@ -5,115 +27,57 @@ const Database = require("better-sqlite3");
 const path = require("path");
 
 const app = express();
+const PORT = Number(process.env.PORT || 3000);
 
-const PORT = Number(
-  process.env.PORT || 3000
-);
-
-/* =====================================================
+/* =========================================================
    CONFIGURATION
-===================================================== */
-
-/* =========================
-   WAVE
-========================= */
+========================================================= */
 
 const WAVE_URL =
   process.env.WAVE_URL ||
   "https://pay.wave.com/m/M_ci_kpNTVGT9JGah/c/ci/?amount=1000";
 
-
-/* =========================
-   WHATSAPP
-========================= */
-
 const WHATSAPP_NUMBER =
   process.env.WHATSAPP_NUMBER ||
   "2250152171974";
 
-
-/*
-   Message général WhatsApp
-*/
-
 const WHATSAPP_MESSAGE =
-  process.env.WHATSAPP_MESSAGE ||
   "Bonjour S-Drive 👋\n\n" +
   "Je souhaite faire analyser mon coupon/match.\n\n" +
-  "Je viens de payer l'analyse de 1 000 F.\n\n" +
-  "Je vous envoie ma capture de matchs pour analyse.\n\n" +
-  "Merci.";
-
-
-/*
-   Message WhatsApp pour une nouvelle analyse
-*/
-
-const WHATSAPP_ANALYSIS_MESSAGE =
-  process.env.WHATSAPP_ANALYSIS_MESSAGE ||
-  "Bonjour S-Drive 👋\n\n" +
-  "Je viens de créer une demande d'analyse.\n\n" +
-  "Je vais vous envoyer ma capture de matchs.\n\n" +
-  "Merci.";
-
-
-/*
-   Message WhatsApp pour mot de passe oublié
-*/
-
-const WHATSAPP_RESET_MESSAGE =
-  process.env.WHATSAPP_RESET_MESSAGE ||
-  "Bonjour S-Drive 👋\n\n" +
-  "J'ai oublié mon mot de passe et je souhaite récupérer l'accès à mon compte.";
-
-
-/* =========================
-   TELEGRAM
-========================= */
+  "Je vous envoie ma capture pour analyse.";
 
 const TELEGRAM_URL =
   process.env.TELEGRAM_URL ||
   "https://t.me/Sdrive12";
 
-
 const TELEGRAM_MESSAGE =
-  process.env.TELEGRAM_MESSAGE ||
   "Bonjour S-Drive 👋\n\n" +
   "Je souhaite faire analyser mon coupon/match.\n\n" +
-  "Je vais vous envoyer ma capture de matchs.\n\n" +
-  "Merci.";
-
-
-/* =========================
-   GROUPES
-========================= */
+  "Je vous envoie ma capture pour analyse.";
 
 const WHATSAPP_GROUP_URL =
   process.env.WHATSAPP_GROUP_URL ||
   "https://chat.whatsapp.com/GikWdoQLZ8TFDHK2rTHH8T?s=cl&p=a&mlu=4&ilr=4";
 
-
 const TELEGRAM_GROUP_URL =
   process.env.TELEGRAM_GROUP_URL ||
   "https://t.me/sdrive123";
 
-
 /* =========================
-   LOGO
+   BOOKMAKERS UNIQUEMENT
 ========================= */
 
-/*
-   Si tu ajoutes un fichier logo.png
-   dans un dossier public, il sera utilisé.
+const WIN1_URL =
+  process.env.WIN1_URL ||
+  "https://one-vv3942.com/?p=gc9k&sub1=DM07";
 
-   Sinon le logo S-Drive de secours
-   sera affiché.
-*/
+const PARIPESA_URL =
+  process.env.PARIPESA_URL ||
+  "https://combodef.com/L?tag=d_4081071m_60651c_&site=4081071&ad=60651";
 
-const LOGO_URL =
-  process.env.LOGO_URL ||
-  "/logo.png";
-
+const LOTO_URL =
+  process.env.LOTO_URL ||
+  "https://jdnlotto.com/register?promo=123";
 
 /* =========================
    RÉSEAUX SOCIAUX
@@ -123,30 +87,9 @@ const TIKTOK_URL =
   process.env.TIKTOK_URL ||
   "https://www.tiktok.com/@batelemi92?_r=1&_t=ZS-99cD47Jhd00";
 
-
 const FACEBOOK_URL =
   process.env.FACEBOOK_URL ||
   "https://www.facebook.com/share/1L96SqLnZT/";
-
-
-/* =========================
-   LIENS PARTENAIRES
-========================= */
-
-const WIN1_URL =
-  process.env.WIN1_URL ||
-  "https://one-vv3942.com/?p=gc9k&sub1=DM07";
-
-
-const PARIPESA_URL =
-  process.env.PARIPESA_URL ||
-  "https://combodef.com/L?tag=d_4081071m_60651c_&site=4081071&ad=60651";
-
-
-const LOTO_URL =
-  process.env.LOTO_URL ||
-  "https://jdnlotto.com/register?promo=123";
-
 
 /* =========================
    SESSION
@@ -157,82 +100,39 @@ const SESSION_SECRET =
   "sdrive-secret-change-this-in-render";
 
 
-/* =====================================================
+/* =========================================================
    EXPRESS
-===================================================== */
+========================================================= */
 
-app.use(
-  express.json({
-    limit: "1mb"
-  })
-);
-
-app.use(
-  express.urlencoded({
-    extended: false
-  })
-);
-
-
-/*
-   Permet d'utiliser les fichiers placés
-   dans le dossier public.
-*/
-
-app.use(
-  express.static(
-    path.join(__dirname, "public")
-  )
-);
-
-
-/* =====================================================
-   SESSION
-===================================================== */
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: false }));
 
 app.use(
   session({
     secret: SESSION_SECRET,
-
     resave: false,
-
     saveUninitialized: false,
 
     cookie: {
       httpOnly: true,
-
       sameSite: "lax",
-
-      secure:
-        process.env.NODE_ENV === "production",
-
-      maxAge:
-        7 *
-        24 *
-        60 *
-        60 *
-        1000
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 7 * 24 * 60 * 60 * 1000
     }
   })
 );
 
 
-/* =====================================================
+/* =========================================================
    DATABASE
-===================================================== */
+========================================================= */
 
 const db = new Database(
   path.join(__dirname, "sdrive.db")
 );
 
-db.pragma(
-  "foreign_keys = ON"
-);
+db.pragma("foreign_keys = ON");
 
-
-/* =====================================================
-   TABLES
-===================================================== */
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
@@ -251,124 +151,77 @@ CREATE TABLE IF NOT EXISTS analyses (
   odds_type INTEGER NOT NULL CHECK(odds_type IN (2,10)),
   status TEXT NOT NULL DEFAULT 'payment_pending',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY(user_id)
-    REFERENCES users(id)
-    ON DELETE CASCADE
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS password_resets (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
-  reset_code TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   resolved_at TEXT,
-  FOREIGN KEY(user_id)
-    REFERENCES users(id)
-    ON DELETE CASCADE
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 `);
 
 
-/* =====================================================
+/* =========================================================
    MIGRATION
-===================================================== */
+========================================================= */
 
-function columnExists(
-  table,
-  column
-) {
-  const columns =
-    db
-      .prepare(
-        `PRAGMA table_info(${table})`
-      )
-      .all();
+function columnExists(table, column) {
+
+  const columns = db
+    .prepare(`PRAGMA table_info(${table})`)
+    .all();
 
   return columns.some(
-    (c) => c.name === column
+    (columnInfo) => columnInfo.name === column
   );
 }
 
 
-/*
-   Ajouter username si ancienne base.
-*/
+if (!columnExists("users", "username")) {
 
-if (
-  !columnExists(
-    "users",
-    "username"
-  )
-) {
   try {
+
     db.exec(
       `ALTER TABLE users ADD COLUMN username TEXT`
     );
+
   } catch (error) {
+
     console.log(
       "Migration username:",
       error.message
     );
+
   }
+
 }
 
 
-/*
-   Ajouter reset_code si ancienne base.
-*/
-
-if (
-  !columnExists(
-    "password_resets",
-    "reset_code"
-  )
-) {
-  try {
-    db.exec(
-      `ALTER TABLE password_resets ADD COLUMN reset_code TEXT`
-    );
-  } catch (error) {
-    console.log(
-      "Migration reset_code:",
-      error.message
-    );
-  }
-}
-
-
-/*
-   Compléter les anciens usernames.
-*/
+/* =========================================================
+   ANCIENS UTILISATEURS
+========================================================= */
 
 try {
 
   const oldUsers =
-    db
-      .prepare(
-        `SELECT id, name, phone, username
-         FROM users
-         WHERE username IS NULL
-         OR username = ''`
-      )
-      .all();
+    db.prepare(
+      `SELECT id, name, phone, username
+       FROM users
+       WHERE username IS NULL OR username = ''`
+    ).all();
 
 
-  for (
-    const user of oldUsers
-  ) {
+  for (const user of oldUsers) {
 
     let base =
-      String(
-        user.name ||
-        "membre"
-      )
+      String(user.name || "membre")
         .trim()
         .toLowerCase()
-        .replace(
-          /[^a-z0-9]/g,
-          ""
-        );
+        .replace(/[^a-z0-9]/g, "");
 
 
     if (!base) {
@@ -376,24 +229,16 @@ try {
     }
 
 
-    let username =
-      base;
-
+    let username = base;
     let number = 1;
 
 
     while (
       db
         .prepare(
-          `SELECT id
-           FROM users
-           WHERE username = ?
-           AND id != ?`
+          "SELECT id FROM users WHERE username = ? AND id != ?"
         )
-        .get(
-          username,
-          user.id
-        )
+        .get(username, user.id)
     ) {
 
       username =
@@ -404,16 +249,12 @@ try {
     }
 
 
-    db
-      .prepare(
-        `UPDATE users
-         SET username = ?
-         WHERE id = ?`
-      )
-      .run(
-        username,
-        user.id
-      );
+    db.prepare(
+      "UPDATE users SET username = ? WHERE id = ?"
+    ).run(
+      username,
+      user.id
+    );
 
   }
 
@@ -427,15 +268,13 @@ try {
 }
 
 
-/* =====================================================
+/* =========================================================
    UTILITAIRES
-===================================================== */
+========================================================= */
 
 function getCurrentUser(req) {
 
-  if (
-    !req.session.userId
-  ) {
+  if (!req.session.userId) {
     return null;
   }
 
@@ -455,87 +294,49 @@ function getCurrentUser(req) {
     .get(
       req.session.userId
     );
-
 }
 
 
-function requireAuth(
-  req,
-  res,
-  next
-) {
+function requireAuth(req, res, next) {
 
-  if (
-    !req.session.userId
-  ) {
+  if (!req.session.userId) {
 
-    return res
-      .status(401)
-      .json({
-        success: false,
-        error:
-          "Connexion requise."
-      });
+    return res.status(401).json({
+
+      success: false,
+
+      error:
+        "Connexion requise."
+
+    });
 
   }
 
-
   next();
+}
+
+
+function escapeHtml(value) {
+
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 
 }
 
 
-/* =====================================================
-   PROTECTION HTML
-===================================================== */
-
-function escapeHtml(
-  value
-) {
-
-  return String(
-    value || ""
-  )
-    .replace(
-      /&/g,
-      "&amp;"
-    )
-    .replace(
-      /</g,
-      "&lt;"
-    )
-    .replace(
-      />/g,
-      "&gt;"
-    )
-    .replace(
-      /"/g,
-      "&quot;"
-    )
-    .replace(
-      /'/g,
-      "&#039;"
-    );
-
-}
-
-
-/* =====================================================
-   LIEN WHATSAPP
-===================================================== */
-
-function whatsappLink(
-  message
-) {
+function whatsappLink(message) {
 
   const number =
     String(
       WHATSAPP_NUMBER
-    )
-      .replace(
-        /[^\d]/g,
-        ""
-      );
+    ).replace(
+      /[^\d]/g,
+      ""
+    );
 
 
   if (!number) {
@@ -547,52 +348,48 @@ function whatsappLink(
     "https://wa.me/" +
     number +
     "?text=" +
-    encodeURIComponent(
-      message
-    )
+    encodeURIComponent(message)
   );
 
 }
 
 
-/* =====================================================
-   LIEN TELEGRAM
-===================================================== */
-
-function telegramShareLink(
-  message
-) {
+function telegramLink(message) {
 
   return (
-    "https://t.me/share/url?url=" +
-    encodeURIComponent(
-      TELEGRAM_URL
-    ) +
-    "&text=" +
-    encodeURIComponent(
-      message
-    )
+    TELEGRAM_URL +
+    "?text=" +
+    encodeURIComponent(message)
   );
 
 }
 
 
-/* =====================================================
+/* =========================================================
    PAGE PRINCIPALE
-===================================================== */
+========================================================= */
 
-app.get(
-  "/",
-  (req, res) => {
+app.get("/", (req, res) => {
 
-    const user =
-      getCurrentUser(req);
+  const user =
+    getCurrentUser(req);
 
-    const loggedIn =
-      Boolean(user);
+  const loggedIn =
+    Boolean(user);
 
 
-    res.send(`<!DOCTYPE html>
+  const initialUser =
+    user
+      ? JSON.stringify({
+          id: user.id,
+          username: user.username,
+          name: user.name,
+          badge: user.badge
+        }).replace(/</g, "\\u003c")
+      : "null";
+
+
+  res.send(`<!DOCTYPE html>
 
 <html lang="fr">
 
@@ -619,56 +416,41 @@ app.get(
 <style>
 
 /* =====================================================
-   DESIGN
+   VARIABLES
 ===================================================== */
 
 :root {
 
-  --navy:
-    #071A2D;
+  --navy: #071A2D;
+  --navy2: #0B223D;
+  --card: #102B4C;
+  --line: #23486B;
 
-  --navy2:
-    #0B223D;
+  --blue: #00BFFF;
+  --green: #21C55D;
 
-  --card:
-    #102B4C;
+  --white: #FFFFFF;
+  --muted: #AFC1D4;
 
-  --line:
-    #23486B;
-
-  --blue:
-    #00BFFF;
-
-  --green:
-    #21C55D;
-
-  --white:
-    #FFFFFF;
-
-  --muted:
-    #AFC1D4;
-
-  --red:
-    #DC2626;
+  --red: #DC2626;
 
 }
 
 
+/* =====================================================
+   GLOBAL
+===================================================== */
+
 * {
-
-  box-sizing:
-    border-box;
-
+  box-sizing: border-box;
 }
 
 
 body {
 
-  margin:
-    0;
+  margin: 0;
 
-  min-height:
-    100vh;
+  min-height: 100vh;
 
   font-family:
     Arial,
@@ -706,10 +488,7 @@ body {
 
 
 .center {
-
-  text-align:
-    center;
-
+  text-align: center;
 }
 
 
@@ -719,11 +498,8 @@ body {
 
 .logo {
 
-  width:
-    100px;
-
-  height:
-    100px;
+  width: 100px;
+  height: 100px;
 
   margin:
     15px auto 8px;
@@ -740,53 +516,228 @@ body {
   border-radius:
     50%;
 
+  font-size:
+    55px;
+
   background:
-    rgba(
-      0,
-      191,
-      255,
-      .10
-    );
+    rgba(0,191,255,.10);
 
   border:
     1px solid
-    rgba(
-      0,
-      191,
-      255,
-      .30
-    );
+    rgba(0,191,255,.30);
 
-  overflow:
-    hidden;
+  box-shadow:
+    0 0 30px
+    rgba(0,191,255,.12);
 
 }
 
 
-.logo img {
+.logo svg {
 
   width:
-    78%;
+    70px;
 
   height:
-    78%;
-
-  object-fit:
-    contain;
-
-}
-
-
-.logo-fallback {
-
-  font-size:
-    55px;
+    70px;
 
 }
 
 
 /* =====================================================
-   TITRES
+   CHARGEMENT
+===================================================== */
+
+.loading-screen {
+
+  position:
+    fixed;
+
+  inset:
+    0;
+
+  z-index:
+    9999;
+
+  display:
+    flex;
+
+  flex-direction:
+    column;
+
+  align-items:
+    center;
+
+  justify-content:
+    center;
+
+  background:
+    #071A2D;
+
+  transition:
+    opacity .35s ease;
+
+}
+
+
+.loading-screen.hidden-loading {
+
+  opacity:
+    0;
+
+  pointer-events:
+    none;
+
+}
+
+
+.loading-logo {
+
+  width:
+    90px;
+
+  height:
+    90px;
+
+  display:
+    flex;
+
+  align-items:
+    center;
+
+  justify-content:
+    center;
+
+  border-radius:
+    50%;
+
+  background:
+    rgba(0,191,255,.10);
+
+  border:
+    1px solid
+    rgba(0,191,255,.30);
+
+  animation:
+    pulse 1.2s infinite;
+
+}
+
+
+.loading-logo svg {
+
+  width:
+    65px;
+
+  height:
+    65px;
+
+}
+
+
+.loading-title {
+
+  margin-top:
+    20px;
+
+  font-size:
+    24px;
+
+  font-weight:
+    900;
+
+}
+
+
+.loading-text {
+
+  margin-top:
+    8px;
+
+  color:
+    var(--muted);
+
+  font-size:
+    14px;
+
+}
+
+
+.loader {
+
+  width:
+    180px;
+
+  height:
+    4px;
+
+  margin-top:
+    20px;
+
+  overflow:
+    hidden;
+
+  border-radius:
+    99px;
+
+  background:
+    #193A5C;
+
+}
+
+
+.loader-bar {
+
+  width:
+    40%;
+
+  height:
+    100%;
+
+  border-radius:
+    99px;
+
+  background:
+    var(--blue);
+
+  animation:
+    loading 1.2s infinite ease-in-out;
+
+}
+
+
+@keyframes loading {
+
+  0% {
+    transform:
+      translateX(-120%);
+  }
+
+  100% {
+    transform:
+      translateX(400%);
+  }
+
+}
+
+
+@keyframes pulse {
+
+  0%, 100% {
+    transform:
+      scale(1);
+  }
+
+  50% {
+    transform:
+      scale(1.06);
+  }
+
+}
+
+
+/* =====================================================
+   TEXTES
 ===================================================== */
 
 h1 {
@@ -829,12 +780,7 @@ h2 {
 .card {
 
   background:
-    rgba(
-      16,
-      43,
-      76,
-      .96
-    );
+    rgba(16,43,76,.96);
 
   border:
     1px solid
@@ -851,12 +797,7 @@ h2 {
 
   box-shadow:
     0 8px 25px
-    rgba(
-      0,
-      0,
-      0,
-      .18
-    );
+    rgba(0,0,0,.18);
 
 }
 
@@ -905,10 +846,6 @@ input:focus {
 
 }
 
-
-/* =====================================================
-   MOT DE PASSE
-===================================================== */
 
 .password-wrap {
 
@@ -1072,37 +1009,7 @@ input:focus {
 
 
 /* =====================================================
-   MOT DE PASSE OUBLIÉ
-===================================================== */
-
-.forgot {
-
-  display:
-    block;
-
-  text-align:
-    center;
-
-  margin:
-    12px 0 3px;
-
-  color:
-    var(--blue);
-
-  text-decoration:
-    none;
-
-  font-weight:
-    700;
-
-  cursor:
-    pointer;
-
-}
-
-
-/* =====================================================
-   CHOIX
+   CHOIX COTE
 ===================================================== */
 
 .choice {
@@ -1125,6 +1032,9 @@ input:focus {
 
   cursor:
     pointer;
+
+  transition:
+    .15s;
 
 }
 
@@ -1163,12 +1073,14 @@ input:focus {
     #123B60;
 
   transform:
-    scale(
-      1.01
-    );
+    scale(1.01);
 
 }
 
+
+/* =====================================================
+   PRIX
+===================================================== */
 
 .price {
 
@@ -1216,7 +1128,7 @@ input:focus {
 
 
 /* =====================================================
-   STATUT
+   STATUS
 ===================================================== */
 
 .status {
@@ -1262,12 +1174,7 @@ input:focus {
 .user-box {
 
   background:
-    rgba(
-      7,
-      26,
-      45,
-      .65
-    );
+    rgba(7,26,45,.65);
 
   border:
     1px solid
@@ -1322,6 +1229,114 @@ input:focus {
 
 
 /* =====================================================
+   BOOKMAKERS
+===================================================== */
+
+.bookmaker {
+
+  display:
+    flex;
+
+  align-items:
+    center;
+
+  justify-content:
+    space-between;
+
+  gap:
+    10px;
+
+  padding:
+    14px;
+
+  margin:
+    9px 0;
+
+  border-radius:
+    14px;
+
+  background:
+    #0B223D;
+
+  border:
+    1px solid
+    #315D82;
+
+}
+
+
+.bookmaker-info {
+
+  display:
+    flex;
+
+  align-items:
+    center;
+
+  gap:
+    10px;
+
+}
+
+
+.bookmaker-icon {
+
+  width:
+    42px;
+
+  height:
+    42px;
+
+  display:
+    flex;
+
+  align-items:
+    center;
+
+  justify-content:
+    center;
+
+  border-radius:
+    12px;
+
+  background:
+    #193A5C;
+
+  font-size:
+    21px;
+
+}
+
+
+.bookmaker-name {
+
+  font-weight:
+    900;
+
+}
+
+
+.bookmaker-button {
+
+  width:
+    auto;
+
+  min-width:
+    105px;
+
+  margin:
+    0;
+
+  padding:
+    11px 13px;
+
+  min-height:
+    44px;
+
+}
+
+
+/* =====================================================
    PARTAGE
 ===================================================== */
 
@@ -1338,213 +1353,6 @@ input:focus {
 
 }
 
-
-/* =====================================================
-   LIENS PARTENAIRES
-===================================================== */
-
-.partner {
-
-  margin:
-    9px 0;
-
-}
-
-
-.partner a {
-
-  text-decoration:
-    none;
-
-}
-
-
-/* =====================================================
-   LOADING
-===================================================== */
-
-.loading-screen {
-
-  position:
-    fixed;
-
-  inset:
-    0;
-
-  z-index:
-    99999;
-
-  background:
-    #071A2D;
-
-  display:
-    flex;
-
-  flex-direction:
-    column;
-
-  align-items:
-    center;
-
-  justify-content:
-    center;
-
-  text-align:
-    center;
-
-}
-
-
-.loading-logo {
-
-  width:
-    82px;
-
-  height:
-    82px;
-
-  border-radius:
-    50%;
-
-  border:
-    2px solid
-    rgba(
-      0,
-      191,
-      255,
-      .30
-    );
-
-  display:
-    flex;
-
-  align-items:
-    center;
-
-  justify-content:
-    center;
-
-  overflow:
-    hidden;
-
-  animation:
-    pulse 1.2s
-    infinite;
-
-}
-
-
-.loading-logo img {
-
-  width:
-    75%;
-
-  height:
-    75%;
-
-  object-fit:
-    contain;
-
-}
-
-
-.loading-fallback {
-
-  font-size:
-    45px;
-
-}
-
-
-.spinner {
-
-  width:
-    35px;
-
-  height:
-    35px;
-
-  margin-top:
-    22px;
-
-  border-radius:
-    50%;
-
-  border:
-    3px solid
-    rgba(
-      255,
-      255,
-      255,
-      .20
-    );
-
-  border-top-color:
-    var(--blue);
-
-  animation:
-    spin .8s
-    linear
-    infinite;
-
-}
-
-
-.loading-text {
-
-  margin-top:
-    13px;
-
-  color:
-    var(--muted);
-
-  font-size:
-    14px;
-
-}
-
-
-@keyframes spin {
-
-  to {
-
-    transform:
-      rotate(
-        360deg
-      );
-
-  }
-
-}
-
-
-@keyframes pulse {
-
-  0%,
-  100% {
-
-    transform:
-      scale(
-        1
-      );
-
-  }
-
-  50% {
-
-    transform:
-      scale(
-        1.05
-      );
-
-  }
-
-}
-
-
-/* =====================================================
-   CACHÉ
-===================================================== */
 
 .hidden {
 
@@ -1584,9 +1392,7 @@ footer {
   .container {
 
     width:
-      calc(
-        100% - 20px
-      );
+      calc(100% - 20px);
 
   }
 
@@ -1601,6 +1407,23 @@ footer {
 
     padding:
       16px;
+
+  }
+
+  .bookmaker {
+
+    flex-direction:
+      column;
+
+    align-items:
+      stretch;
+
+  }
+
+  .bookmaker-button {
+
+    width:
+      100%;
 
   }
 
@@ -1620,39 +1443,62 @@ footer {
 
 <div
   id="loadingScreen"
-  class="loading-screen hidden"
+  class="loading-screen"
 >
 
   <div class="loading-logo">
 
-    <img
-      src="${escapeHtml(LOGO_URL)}"
-      alt="S-Drive"
-      onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+    <svg
+      viewBox="0 0 100 100"
+      xmlns="http://www.w3.org/2000/svg"
     >
 
-    <span
-      class="loading-fallback"
-      style="display:none"
-    >
-      ⚽
-    </span>
+      <path
+        d="M50 82 C49 65 48 47 43 28"
+        stroke="#21C55D"
+        stroke-width="8"
+        fill="none"
+        stroke-linecap="round"
+      />
+
+      <path
+        d="M45 47 C25 45 17 33 16 19 C31 19 43 27 45 47Z"
+        fill="#21C55D"
+      />
+
+      <path
+        d="M49 58 C67 55 80 45 83 30 C68 30 55 38 49 58Z"
+        fill="#21C55D"
+      />
+
+      <path
+        d="M47 31 C58 23 68 13 67 4 C54 7 47 17 47 31Z"
+        fill="#21C55D"
+      />
+
+    </svg>
 
   </div>
 
-  <div class="spinner"></div>
+
+  <div class="loading-title">
+    S-Drive
+  </div>
+
 
   <div class="loading-text">
-    Ouverture de S-Drive...
+    Préparation de votre espace...
+  </div>
+
+
+  <div class="loader">
+    <div class="loader-bar"></div>
   </div>
 
 </div>
 
 
-<main
-  class="container"
-  id="mainContainer"
->
+<main class="container">
 
 
 <!-- =====================================================
@@ -1851,6 +1697,8 @@ footer {
 </div>
 
 </section>
+
+
 <!-- =====================================================
      DASHBOARD
 ===================================================== -->
@@ -2205,6 +2053,7 @@ footer {
 <!-- =====================================================
      COMMUNAUTÉ
 ===================================================== -->
+
 <div class="card">
 
   <h2>
@@ -2431,6 +2280,7 @@ footer {
 /* =====================================================
    VARIABLES JAVASCRIPT
 ===================================================== */
+
 let selectedOdds = 2;
 
 const initialUser =
@@ -2612,6 +2462,7 @@ function showLoadingScreen(
 /* =====================================================
    INSCRIPTION
 ===================================================== */
+
 async function register() {
 
   const username =
@@ -2798,6 +2649,7 @@ async function register() {
 /* =====================================================
    CONNEXION
 ===================================================== */
+
 async function login() {
 
   const username =
@@ -3043,6 +2895,7 @@ async function forgotPassword() {
 /* =====================================================
    SESSION
 ===================================================== */
+
 async function checkSession() {
 
   try {
@@ -3324,6 +3177,7 @@ async function logout() {
 /* =====================================================
    INITIALISATION
 ===================================================== */
+
 document.addEventListener(
   "DOMContentLoaded",
   () => {
@@ -3557,6 +3411,7 @@ app.post(
 /* =========================================================
    API CONNEXION
 ========================================================= */
+
 app.post(
   "/api/login",
   async (req, res) => {
@@ -3777,8 +3632,7 @@ app.post(
 );
 
 
-/*
-=========================================================
+/* =========================================================
    API MOT DE PASSE OUBLIÉ
 ========================================================= */
 
@@ -4050,8 +3904,31 @@ app.post(
 );
 
 
-/*
-=========================================================
+/* =========================================================
+   API SANTÉ
+========================================================= */
+
+app.get(
+  "/api/health",
+  (req, res) => {
+
+    res.json({
+
+      success: true,
+
+      message:
+        "S-Drive fonctionne correctement.",
+
+      time:
+        new Date().toISOString()
+
+    });
+
+  }
+);
+
+
+/* =========================================================
    ROUTES INCONNUES
 ========================================================= */
 
