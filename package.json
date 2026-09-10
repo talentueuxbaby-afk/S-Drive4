@@ -1,7 +1,7 @@
 {
   "name": "s-drive",
   "version": "1.0.0",
-  "description": "S-Drive - application d'analyse de matchs",
+  "description": "S-Drive - application d'analyse des matchs et coupons du jour",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
