@@ -5,66 +5,234 @@ const Database = require("better-sqlite3");
 const path = require("path");
 
 const app = express();
-const PORT = Number(process.env.PORT || 3000);
+
+const PORT = Number(
+  process.env.PORT || 3000
+);
+
+/* =====================================================
+   CONFIGURATION
+===================================================== */
 
 /* =========================
-   CONFIGURATION
+   WAVE
 ========================= */
 
 const WAVE_URL =
   process.env.WAVE_URL ||
   "https://pay.wave.com/m/M_ci_kpNTVGT9JGah/c/ci/?amount=1000";
 
+
+/* =========================
+   WHATSAPP
+========================= */
+
 const WHATSAPP_NUMBER =
   process.env.WHATSAPP_NUMBER ||
-  "0152171974";
+  "2250152171974";
+
+
+/*
+   Message général WhatsApp
+*/
+
+const WHATSAPP_MESSAGE =
+  process.env.WHATSAPP_MESSAGE ||
+  "Bonjour S-Drive 👋\n\n" +
+  "Je souhaite faire analyser mon coupon/match.\n\n" +
+  "Je viens de payer l'analyse de 1 000 F.\n\n" +
+  "Je vous envoie ma capture de matchs pour analyse.\n\n" +
+  "Merci.";
+
+
+/*
+   Message WhatsApp pour une nouvelle analyse
+*/
+
+const WHATSAPP_ANALYSIS_MESSAGE =
+  process.env.WHATSAPP_ANALYSIS_MESSAGE ||
+  "Bonjour S-Drive 👋\n\n" +
+  "Je viens de créer une demande d'analyse.\n\n" +
+  "Je vais vous envoyer ma capture de matchs.\n\n" +
+  "Merci.";
+
+
+/*
+   Message WhatsApp pour mot de passe oublié
+*/
+
+const WHATSAPP_RESET_MESSAGE =
+  process.env.WHATSAPP_RESET_MESSAGE ||
+  "Bonjour S-Drive 👋\n\n" +
+  "J'ai oublié mon mot de passe et je souhaite récupérer l'accès à mon compte.";
+
+
+/* =========================
+   TELEGRAM
+========================= */
 
 const TELEGRAM_URL =
   process.env.TELEGRAM_URL ||
   "https://t.me/Sdrive12";
 
+
+const TELEGRAM_MESSAGE =
+  process.env.TELEGRAM_MESSAGE ||
+  "Bonjour S-Drive 👋\n\n" +
+  "Je souhaite faire analyser mon coupon/match.\n\n" +
+  "Je vais vous envoyer ma capture de matchs.\n\n" +
+  "Merci.";
+
+
+/* =========================
+   GROUPES
+========================= */
+
 const WHATSAPP_GROUP_URL =
   process.env.WHATSAPP_GROUP_URL ||
   "https://chat.whatsapp.com/GikWdoQLZ8TFDHK2rTHH8T?s=cl&p=a&mlu=4&ilr=4";
+
 
 const TELEGRAM_GROUP_URL =
   process.env.TELEGRAM_GROUP_URL ||
   "https://t.me/sdrive123";
 
+
+/* =========================
+   LOGO
+========================= */
+
+/*
+   Si tu ajoutes un fichier logo.png
+   dans un dossier public, il sera utilisé.
+
+   Sinon le logo S-Drive de secours
+   sera affiché.
+*/
+
+const LOGO_URL =
+  process.env.LOGO_URL ||
+  "/logo.png";
+
+
+/* =========================
+   RÉSEAUX SOCIAUX
+========================= */
+
+const TIKTOK_URL =
+  process.env.TIKTOK_URL ||
+  "https://www.tiktok.com/@batelemi92?_r=1&_t=ZS-99cD47Jhd00";
+
+
+const FACEBOOK_URL =
+  process.env.FACEBOOK_URL ||
+  "https://www.facebook.com/share/1L96SqLnZT/";
+
+
+/* =========================
+   LIENS PARTENAIRES
+========================= */
+
+const WIN1_URL =
+  process.env.WIN1_URL ||
+  "https://one-vv3942.com/?p=gc9k&sub1=DM07";
+
+
+const PARIPESA_URL =
+  process.env.PARIPESA_URL ||
+  "https://combodef.com/L?tag=d_4081071m_60651c_&site=4081071&ad=60651";
+
+
+const LOTO_URL =
+  process.env.LOTO_URL ||
+  "https://jdnlotto.com/register?promo=123";
+
+
+/* =========================
+   SESSION
+========================= */
+
 const SESSION_SECRET =
   process.env.SESSION_SECRET ||
   "sdrive-secret-change-this-in-render";
 
-/* =========================
-   EXPRESS
-========================= */
 
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: false }));
+/* =====================================================
+   EXPRESS
+===================================================== */
+
+app.use(
+  express.json({
+    limit: "1mb"
+  })
+);
+
+app.use(
+  express.urlencoded({
+    extended: false
+  })
+);
+
+
+/*
+   Permet d'utiliser les fichiers placés
+   dans le dossier public.
+*/
+
+app.use(
+  express.static(
+    path.join(__dirname, "public")
+  )
+);
+
+
+/* =====================================================
+   SESSION
+===================================================== */
 
 app.use(
   session({
     secret: SESSION_SECRET,
+
     resave: false,
+
     saveUninitialized: false,
+
     cookie: {
       httpOnly: true,
+
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 7 * 24 * 60 * 60 * 1000
+
+      secure:
+        process.env.NODE_ENV === "production",
+
+      maxAge:
+        7 *
+        24 *
+        60 *
+        60 *
+        1000
     }
   })
 );
 
-/* =========================
+
+/* =====================================================
    DATABASE
-========================= */
+===================================================== */
 
 const db = new Database(
   path.join(__dirname, "sdrive.db")
 );
 
-db.pragma("foreign_keys = ON");
+db.pragma(
+  "foreign_keys = ON"
+);
+
+
+/* =====================================================
+   TABLES
+===================================================== */
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
@@ -83,97 +251,194 @@ CREATE TABLE IF NOT EXISTS analyses (
   odds_type INTEGER NOT NULL CHECK(odds_type IN (2,10)),
   status TEXT NOT NULL DEFAULT 'payment_pending',
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  FOREIGN KEY(user_id)
+    REFERENCES users(id)
+    ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS password_resets (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
+  reset_code TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   resolved_at TEXT,
-  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+  FOREIGN KEY(user_id)
+    REFERENCES users(id)
+    ON DELETE CASCADE
 );
 `);
 
-/* =========================
-   MIGRATION ANCIENNE BASE
-========================= */
 
-function columnExists(table, column) {
-  const columns = db
-    .prepare(`PRAGMA table_info(${table})`)
-    .all();
+/* =====================================================
+   MIGRATION
+===================================================== */
 
-  return columns.some((c) => c.name === column);
+function columnExists(
+  table,
+  column
+) {
+  const columns =
+    db
+      .prepare(
+        `PRAGMA table_info(${table})`
+      )
+      .all();
+
+  return columns.some(
+    (c) => c.name === column
+  );
 }
 
-if (!columnExists("users", "username")) {
+
+/*
+   Ajouter username si ancienne base.
+*/
+
+if (
+  !columnExists(
+    "users",
+    "username"
+  )
+) {
   try {
     db.exec(
       `ALTER TABLE users ADD COLUMN username TEXT`
     );
-  } catch (e) {
+  } catch (error) {
     console.log(
       "Migration username:",
-      e.message
+      error.message
     );
   }
 }
 
-try {
-  const oldUsers = db
-    .prepare(
-      `SELECT id, name, phone, username
-       FROM users
-       WHERE username IS NULL OR username = ''`
-    )
-    .all();
 
-  for (const u of oldUsers) {
+/*
+   Ajouter reset_code si ancienne base.
+*/
+
+if (
+  !columnExists(
+    "password_resets",
+    "reset_code"
+  )
+) {
+  try {
+    db.exec(
+      `ALTER TABLE password_resets ADD COLUMN reset_code TEXT`
+    );
+  } catch (error) {
+    console.log(
+      "Migration reset_code:",
+      error.message
+    );
+  }
+}
+
+
+/*
+   Compléter les anciens usernames.
+*/
+
+try {
+
+  const oldUsers =
+    db
+      .prepare(
+        `SELECT id, name, phone, username
+         FROM users
+         WHERE username IS NULL
+         OR username = ''`
+      )
+      .all();
+
+
+  for (
+    const user of oldUsers
+  ) {
+
     let base =
-      String(u.name || "membre")
+      String(
+        user.name ||
+        "membre"
+      )
         .trim()
         .toLowerCase()
-        .replace(/[^a-z0-9]/g, "");
+        .replace(
+          /[^a-z0-9]/g,
+          ""
+        );
+
 
     if (!base) {
       base = "membre";
     }
 
-    let username = base;
+
+    let username =
+      base;
+
     let number = 1;
+
 
     while (
       db
         .prepare(
-          "SELECT id FROM users WHERE username = ? AND id != ?"
+          `SELECT id
+           FROM users
+           WHERE username = ?
+           AND id != ?`
         )
-        .get(username, u.id)
+        .get(
+          username,
+          user.id
+        )
     ) {
-      username = `${base}${number}`;
+
+      username =
+        `${base}${number}`;
+
       number++;
+
     }
 
-    db.prepare(
-      "UPDATE users SET username = ? WHERE id = ?"
-    ).run(username, u.id);
+
+    db
+      .prepare(
+        `UPDATE users
+         SET username = ?
+         WHERE id = ?`
+      )
+      .run(
+        username,
+        user.id
+      );
+
   }
-} catch (e) {
+
+} catch (error) {
+
   console.log(
     "Migration utilisateurs:",
-    e.message
+    error.message
   );
+
 }
 
-/* =========================
+
+/* =====================================================
    UTILITAIRES
-========================= */
+===================================================== */
 
 function getCurrentUser(req) {
-  if (!req.session.userId) {
+
+  if (
+    !req.session.userId
+  ) {
     return null;
   }
+
 
   return db
     .prepare(
@@ -187,55 +452,148 @@ function getCurrentUser(req) {
        FROM users
        WHERE id = ?`
     )
-    .get(req.session.userId);
+    .get(
+      req.session.userId
+    );
+
 }
 
-function requireAuth(req, res, next) {
-  if (!req.session.userId) {
-    return res.status(401).json({
-      success: false,
-      error: "Connexion requise."
-    });
+
+function requireAuth(
+  req,
+  res,
+  next
+) {
+
+  if (
+    !req.session.userId
+  ) {
+
+    return res
+      .status(401)
+      .json({
+        success: false,
+        error:
+          "Connexion requise."
+      });
+
   }
 
+
   next();
+
 }
 
-function escapeHtml(value) {
-  return String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+
+/* =====================================================
+   PROTECTION HTML
+===================================================== */
+
+function escapeHtml(
+  value
+) {
+
+  return String(
+    value || ""
+  )
+    .replace(
+      /&/g,
+      "&amp;"
+    )
+    .replace(
+      /</g,
+      "&lt;"
+    )
+    .replace(
+      />/g,
+      "&gt;"
+    )
+    .replace(
+      /"/g,
+      "&quot;"
+    )
+    .replace(
+      /'/g,
+      "&#039;"
+    );
+
 }
 
-function whatsappLink(message) {
-  const number = String(
-    WHATSAPP_NUMBER
-  ).replace(/[^\d]/g, "");
+
+/* =====================================================
+   LIEN WHATSAPP
+===================================================== */
+
+function whatsappLink(
+  message
+) {
+
+  const number =
+    String(
+      WHATSAPP_NUMBER
+    )
+      .replace(
+        /[^\d]/g,
+        ""
+      );
+
 
   if (!number) {
     return null;
   }
 
+
   return (
     "https://wa.me/" +
     number +
     "?text=" +
-    encodeURIComponent(message)
+    encodeURIComponent(
+      message
+    )
   );
+
 }
 
-/* =========================
+
+/* =====================================================
+   LIEN TELEGRAM
+===================================================== */
+
+function telegramShareLink(
+  message
+) {
+
+  return (
+    "https://t.me/share/url?url=" +
+    encodeURIComponent(
+      TELEGRAM_URL
+    ) +
+    "&text=" +
+    encodeURIComponent(
+      message
+    )
+  );
+
+}
+
+
+/* =====================================================
    PAGE PRINCIPALE
-========================= */
+===================================================== */
 
-app.get("/", (req, res) => {
-  const user = getCurrentUser(req);
-  const loggedIn = Boolean(user);
+app.get(
+  "/",
+  (req, res) => {
 
-  res.send(`<!DOCTYPE html>
+    const user =
+      getCurrentUser(req);
+
+    const loggedIn =
+      Boolean(user);
+
+
+    res.send(`<!DOCTYPE html>
+
 <html lang="fr">
 
 <head>
@@ -257,113 +615,269 @@ app.get("/", (req, res) => {
 
 <title>S-Drive</title>
 
+
 <style>
 
+/* =====================================================
+   DESIGN
+===================================================== */
+
 :root {
-  --navy: #071A2D;
-  --navy2: #0B223D;
-  --card: #102B4C;
-  --line: #23486B;
-  --blue: #00BFFF;
-  --green: #21C55D;
-  --white: #FFFFFF;
-  --muted: #AFC1D4;
-  --red: #DC2626;
+
+  --navy:
+    #071A2D;
+
+  --navy2:
+    #0B223D;
+
+  --card:
+    #102B4C;
+
+  --line:
+    #23486B;
+
+  --blue:
+    #00BFFF;
+
+  --green:
+    #21C55D;
+
+  --white:
+    #FFFFFF;
+
+  --muted:
+    #AFC1D4;
+
+  --red:
+    #DC2626;
+
 }
+
 
 * {
-  box-sizing: border-box;
+
+  box-sizing:
+    border-box;
+
 }
 
+
 body {
-  margin: 0;
-  min-height: 100vh;
-  font-family: Arial, Helvetica, sans-serif;
-  color: var(--white);
+
+  margin:
+    0;
+
+  min-height:
+    100vh;
+
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif;
+
+  color:
+    var(--white);
+
   background:
     radial-gradient(
       circle at top,
       #12385C 0%,
       var(--navy) 58%
     );
+
 }
+
 
 .container {
-  width: min(
-    calc(100% - 28px),
-    520px
-  );
-  margin: auto;
-  padding: 20px 0 35px;
+
+  width:
+    min(
+      calc(100% - 28px),
+      520px
+    );
+
+  margin:
+    auto;
+
+  padding:
+    20px 0 35px;
+
 }
+
 
 .center {
-  text-align: center;
+
+  text-align:
+    center;
+
 }
 
+
+/* =====================================================
+   LOGO
+===================================================== */
+
 .logo {
-  width: 100px;
-  height: 100px;
-  margin: 15px auto 8px;
 
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width:
+    100px;
 
-  border-radius: 50%;
+  height:
+    100px;
 
-  font-size: 62px;
+  margin:
+    15px auto 8px;
+
+  display:
+    flex;
+
+  align-items:
+    center;
+
+  justify-content:
+    center;
+
+  border-radius:
+    50%;
 
   background:
-    rgba(0,191,255,.10);
+    rgba(
+      0,
+      191,
+      255,
+      .10
+    );
 
   border:
     1px solid
-    rgba(0,191,255,.25);
+    rgba(
+      0,
+      191,
+      255,
+      .30
+    );
+
+  overflow:
+    hidden;
+
 }
+
+
+.logo img {
+
+  width:
+    78%;
+
+  height:
+    78%;
+
+  object-fit:
+    contain;
+
+}
+
+
+.logo-fallback {
+
+  font-size:
+    55px;
+
+}
+
+
+/* =====================================================
+   TITRES
+===================================================== */
 
 h1 {
-  margin: 8px 0 5px;
-  font-size: 34px;
+
+  margin:
+    8px 0 5px;
+
+  font-size:
+    34px;
+
 }
+
 
 h2 {
-  margin: 0 0 16px;
-  font-size: 21px;
+
+  margin:
+    0 0 16px;
+
+  font-size:
+    21px;
+
 }
+
 
 .muted {
-  color: var(--muted);
-  line-height: 1.55;
+
+  color:
+    var(--muted);
+
+  line-height:
+    1.55;
+
 }
 
+
+/* =====================================================
+   CARTES
+===================================================== */
+
 .card {
+
   background:
-    rgba(16,43,76,.96);
+    rgba(
+      16,
+      43,
+      76,
+      .96
+    );
 
   border:
     1px solid
     var(--line);
 
-  border-radius: 20px;
+  border-radius:
+    20px;
 
-  padding: 20px;
+  padding:
+    20px;
 
-  margin: 15px 0;
+  margin:
+    15px 0;
 
   box-shadow:
     0 8px 25px
-    rgba(0,0,0,.18);
+    rgba(
+      0,
+      0,
+      0,
+      .18
+    );
+
 }
 
+
+/* =====================================================
+   INPUTS
+===================================================== */
+
 input {
-  width: 100%;
 
-  padding: 16px;
+  width:
+    100%;
 
-  margin: 7px 0;
+  padding:
+    16px;
 
-  border-radius: 13px;
+  margin:
+    7px 0;
+
+  border-radius:
+    13px;
 
   border:
     1px solid
@@ -372,103 +886,227 @@ input {
   background:
     var(--navy2);
 
-  color: var(--white);
+  color:
+    var(--white);
 
-  font-size: 16px;
+  font-size:
+    16px;
 
-  outline: none;
+  outline:
+    none;
+
 }
+
 
 input:focus {
+
   border-color:
     var(--blue);
+
 }
+
+
+/* =====================================================
+   MOT DE PASSE
+===================================================== */
 
 .password-wrap {
-  position: relative;
+
+  position:
+    relative;
+
 }
+
 
 .password-wrap input {
-  padding-right: 55px;
+
+  padding-right:
+    55px;
+
 }
+
 
 .eye {
-  position: absolute;
 
-  right: 7px;
-  top: 7px;
+  position:
+    absolute;
 
-  width: 45px;
-  height: 46px;
+  right:
+    7px;
 
-  border: 0;
+  top:
+    7px;
 
-  background: transparent;
+  width:
+    45px;
 
-  color: white;
+  height:
+    46px;
 
-  font-size: 20px;
+  border:
+    0;
 
-  cursor: pointer;
+  background:
+    transparent;
+
+  color:
+    white;
+
+  font-size:
+    20px;
+
+  cursor:
+    pointer;
+
 }
+
+
+/* =====================================================
+   BOUTONS
+===================================================== */
 
 .btn {
-  width: 100%;
 
-  min-height: 52px;
+  width:
+    100%;
 
-  padding: 14px;
+  min-height:
+    52px;
 
-  border-radius: 14px;
+  padding:
+    14px;
 
-  font-weight: 800;
+  border-radius:
+    14px;
 
-  font-size: 15px;
+  font-weight:
+    800;
 
-  border: 0;
+  font-size:
+    15px;
 
-  margin: 8px 0;
+  border:
+    0;
 
-  cursor: pointer;
+  margin:
+    8px 0;
 
-  text-decoration: none;
+  cursor:
+    pointer;
 
-  display: flex;
+  text-decoration:
+    none;
 
-  justify-content: center;
+  display:
+    flex;
 
-  align-items: center;
+  justify-content:
+    center;
 
-  text-align: center;
+  align-items:
+    center;
+
+  text-align:
+    center;
+
 }
+
 
 .btn:disabled {
-  opacity: .65;
-  cursor: wait;
+
+  opacity:
+    .65;
+
+  cursor:
+    wait;
+
 }
+
 
 .primary {
-  background: var(--blue);
-  color: #001B2D;
+
+  background:
+    var(--blue);
+
+  color:
+    #001B2D;
+
 }
+
 
 .green {
-  background: var(--green);
-  color: white;
+
+  background:
+    var(--green);
+
+  color:
+    white;
+
 }
+
 
 .secondary {
-  background: #193A5C;
-  color: white;
-  border: 1px solid #315D82;
+
+  background:
+    #193A5C;
+
+  color:
+    white;
+
+  border:
+    1px solid
+    #315D82;
+
 }
+
 
 .danger {
-  background: var(--red);
-  color: white;
+
+  background:
+    var(--red);
+
+  color:
+    white;
+
 }
 
+
+/* =====================================================
+   MOT DE PASSE OUBLIÉ
+===================================================== */
+
+.forgot {
+
+  display:
+    block;
+
+  text-align:
+    center;
+
+  margin:
+    12px 0 3px;
+
+  color:
+    var(--blue);
+
+  text-decoration:
+    none;
+
+  font-weight:
+    700;
+
+  cursor:
+    pointer;
+
+}
+
+
+/* =====================================================
+   CHOIX
+===================================================== */
+
 .choice {
+
   border:
     1px solid
     #315D82;
@@ -476,27 +1114,48 @@ input:focus {
   background:
     #0B223D;
 
-  padding: 17px;
+  padding:
+    17px;
 
-  border-radius: 15px;
+  border-radius:
+    15px;
 
-  margin: 9px 0;
+  margin:
+    9px 0;
 
-  cursor: pointer;
+  cursor:
+    pointer;
+
 }
+
 
 .choice strong {
-  display: block;
-  font-size: 18px;
-  margin-bottom: 6px;
+
+  display:
+    block;
+
+  font-size:
+    18px;
+
+  margin-bottom:
+    6px;
+
 }
+
 
 .choice small {
-  color: var(--muted);
-  line-height: 1.4;
+
+  color:
+    var(--muted);
+
+  line-height:
+    1.4;
+
 }
 
+
 .choice.selected {
+
   border-color:
     var(--blue);
 
@@ -504,18 +1163,38 @@ input:focus {
     #123B60;
 
   transform:
-    scale(1.01);
+    scale(
+      1.01
+    );
+
 }
+
 
 .price {
-  font-size: 28px;
-  font-weight: 900;
-  text-align: center;
-  margin: 17px 0;
+
+  font-size:
+    28px;
+
+  font-weight:
+    900;
+
+  text-align:
+    center;
+
+  margin:
+    17px 0;
+
 }
 
+
+/* =====================================================
+   NOTICES
+===================================================== */
+
 .notice {
-  padding: 14px;
+
+  padding:
+    14px;
 
   border-left:
     3px solid
@@ -524,60 +1203,107 @@ input:focus {
   background:
     #0C2745;
 
-  border-radius: 8px;
+  border-radius:
+    8px;
 
-  line-height: 1.55;
+  line-height:
+    1.55;
 
-  margin: 10px 0;
+  margin:
+    10px 0;
+
 }
+
+
+/* =====================================================
+   STATUT
+===================================================== */
 
 .status {
-  margin-top: 12px;
 
-  color: var(--muted);
+  margin-top:
+    12px;
 
-  text-align: center;
+  color:
+    var(--muted);
 
-  min-height: 24px;
+  text-align:
+    center;
 
-  line-height: 1.4;
+  min-height:
+    24px;
+
+  line-height:
+    1.4;
+
 }
+
 
 .status.success {
-  color: #6EE7A0;
+
+  color:
+    #6EE7A0;
+
 }
+
 
 .status.error {
-  color: #FF8A8A;
+
+  color:
+    #FF8A8A;
+
 }
 
+
+/* =====================================================
+   UTILISATEUR
+===================================================== */
+
 .user-box {
+
   background:
-    rgba(7,26,45,.65);
+    rgba(
+      7,
+      26,
+      45,
+      .65
+    );
 
   border:
     1px solid
     var(--line);
 
-  padding: 15px;
+  padding:
+    15px;
 
-  border-radius: 14px;
+  border-radius:
+    14px;
 
-  margin-bottom: 15px;
+  margin-bottom:
+    15px;
 
-  text-align: center;
+  text-align:
+    center;
+
 }
 
+
 .badge {
-  display: inline-flex;
 
-  align-items: center;
+  display:
+    inline-flex;
 
-  gap: 5px;
+  align-items:
+    center;
 
-  padding: 6px 10px;
+  gap:
+    5px;
 
-  border-radius: 999px;
+  padding:
+    6px 10px;
+
+  border-radius:
+    999px;
 
   background:
     #123B60;
@@ -586,47 +1312,296 @@ input:focus {
     1px solid
     var(--blue);
 
-  font-size: 12px;
+  font-size:
+    12px;
 
-  font-weight: 800;
+  font-weight:
+    800;
+
 }
 
+
+/* =====================================================
+   PARTAGE
+===================================================== */
+
 .share-box {
-  display: grid;
+
+  display:
+    grid;
 
   grid-template-columns:
     1fr 1fr;
 
-  gap: 8px;
+  gap:
+    8px;
+
 }
+
+
+/* =====================================================
+   LIENS PARTENAIRES
+===================================================== */
+
+.partner {
+
+  margin:
+    9px 0;
+
+}
+
+
+.partner a {
+
+  text-decoration:
+    none;
+
+}
+
+
+/* =====================================================
+   LOADING
+===================================================== */
+
+.loading-screen {
+
+  position:
+    fixed;
+
+  inset:
+    0;
+
+  z-index:
+    99999;
+
+  background:
+    #071A2D;
+
+  display:
+    flex;
+
+  flex-direction:
+    column;
+
+  align-items:
+    center;
+
+  justify-content:
+    center;
+
+  text-align:
+    center;
+
+}
+
+
+.loading-logo {
+
+  width:
+    82px;
+
+  height:
+    82px;
+
+  border-radius:
+    50%;
+
+  border:
+    2px solid
+    rgba(
+      0,
+      191,
+      255,
+      .30
+    );
+
+  display:
+    flex;
+
+  align-items:
+    center;
+
+  justify-content:
+    center;
+
+  overflow:
+    hidden;
+
+  animation:
+    pulse 1.2s
+    infinite;
+
+}
+
+
+.loading-logo img {
+
+  width:
+    75%;
+
+  height:
+    75%;
+
+  object-fit:
+    contain;
+
+}
+
+
+.loading-fallback {
+
+  font-size:
+    45px;
+
+}
+
+
+.spinner {
+
+  width:
+    35px;
+
+  height:
+    35px;
+
+  margin-top:
+    22px;
+
+  border-radius:
+    50%;
+
+  border:
+    3px solid
+    rgba(
+      255,
+      255,
+      255,
+      .20
+    );
+
+  border-top-color:
+    var(--blue);
+
+  animation:
+    spin .8s
+    linear
+    infinite;
+
+}
+
+
+.loading-text {
+
+  margin-top:
+    13px;
+
+  color:
+    var(--muted);
+
+  font-size:
+    14px;
+
+}
+
+
+@keyframes spin {
+
+  to {
+
+    transform:
+      rotate(
+        360deg
+      );
+
+  }
+
+}
+
+
+@keyframes pulse {
+
+  0%,
+  100% {
+
+    transform:
+      scale(
+        1
+      );
+
+  }
+
+  50% {
+
+    transform:
+      scale(
+        1.05
+      );
+
+  }
+
+}
+
+
+/* =====================================================
+   CACHÉ
+===================================================== */
 
 .hidden {
-  display: none !important;
+
+  display:
+    none !important;
+
 }
+
+
+/* =====================================================
+   FOOTER
+===================================================== */
 
 footer {
-  text-align: center;
 
-  color: var(--muted);
+  text-align:
+    center;
 
-  font-size: 12px;
+  color:
+    var(--muted);
 
-  margin-top: 25px;
+  font-size:
+    12px;
+
+  margin-top:
+    25px;
+
 }
+
+
+/* =====================================================
+   MOBILE
+===================================================== */
 
 @media(max-width:360px) {
 
   .container {
+
     width:
-      calc(100% - 20px);
+      calc(
+        100% - 20px
+      );
+
   }
 
   h1 {
-    font-size: 29px;
+
+    font-size:
+      29px;
+
   }
 
   .card {
-    padding: 16px;
+
+    padding:
+      16px;
+
   }
 
 }
@@ -635,629 +1610,939 @@ footer {
 
 </head>
 
+
 <body>
 
-<main class="container">
 
-<!-- =====================
-     CONNEXION / INSCRIPTION
-===================== -->
+<!-- =====================================================
+     ÉCRAN DE CHARGEMENT
+===================================================== -->
+
+<div
+  id="loadingScreen"
+  class="loading-screen hidden"
+>
+
+  <div class="loading-logo">
+
+    <img
+      src="${escapeHtml(LOGO_URL)}"
+      alt="S-Drive"
+      onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
+    >
+
+    <span
+      class="loading-fallback"
+      style="display:none"
+    >
+      ⚽
+    </span>
+
+  </div>
+
+  <div class="spinner"></div>
+
+  <div class="loading-text">
+    Ouverture de S-Drive...
+  </div>
+
+</div>
+
+
+<main
+  class="container"
+  id="mainContainer"
+>
+
+
+<!-- =====================================================
+     AUTHENTIFICATION
+===================================================== -->
 
 <section
   id="auth"
   class="${loggedIn ? "hidden" : ""}"
 >
 
+
 <div class="center">
 
-<div class="logo">
-⚽
+  <div class="logo">
+
+    <svg
+      viewBox="0 0 100 100"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+
+      <path
+        d="M50 82 C49 65 48 47 43 28"
+        stroke="#21C55D"
+        stroke-width="8"
+        fill="none"
+        stroke-linecap="round"
+      />
+
+      <path
+        d="M45 47 C25 45 17 33 16 19 C31 19 43 27 45 47Z"
+        fill="#21C55D"
+      />
+
+      <path
+        d="M49 58 C67 55 80 45 83 30 C68 30 55 38 49 58Z"
+        fill="#21C55D"
+      />
+
+      <path
+        d="M47 31 C58 23 68 13 67 4 C54 7 47 17 47 31Z"
+        fill="#21C55D"
+      />
+
+    </svg>
+
+  </div>
+
+
+  <h1>S-Drive</h1>
+
+
+  <p class="muted">
+    Application d'analyse des matchs et coupons du jour.
+  </p>
+
 </div>
 
-<h1>S-Drive</h1>
-
-<p class="muted">
-Application d'analyse des matchs et coupons du jour.
-</p>
-
-</div>
 
 <!-- CONNEXION -->
 
 <div class="card">
 
-<h2>Connexion</h2>
+  <h2>
+    Connexion
+  </h2>
 
-<input
-  id="loginUsername"
-  type="text"
-  autocomplete="username"
-  placeholder="Nom d'utilisateur"
->
 
-<div class="password-wrap">
+  <input
+    id="loginUsername"
+    type="text"
+    autocomplete="username"
+    placeholder="Nom d'utilisateur"
+  >
 
-<input
-  id="loginPassword"
-  type="password"
-  autocomplete="current-password"
-  placeholder="Mot de passe"
->
 
-<button
-  class="eye"
-  type="button"
-  onclick="togglePassword('loginPassword', this)"
->
-👁
-</button>
+  <div class="password-wrap">
+
+    <input
+      id="loginPassword"
+      type="password"
+      autocomplete="current-password"
+      placeholder="Mot de passe"
+    >
+
+    <button
+      class="eye"
+      type="button"
+      onclick="togglePassword('loginPassword', this)"
+    >
+      👁
+    </button>
+
+  </div>
+
+
+  <button
+    id="loginButton"
+    class="btn primary"
+    type="button"
+    onclick="login()"
+  >
+    Se connecter
+  </button>
+
+
+  <button
+    class="btn secondary"
+    type="button"
+    onclick="forgotPassword()"
+  >
+    🔑 Mot de passe oublié ?
+  </button>
+
+
+  <div
+    id="loginStatus"
+    class="status"
+  ></div>
 
 </div>
 
-<button
-  id="loginButton"
-  class="btn primary"
-  type="button"
-  onclick="login()"
->
-Se connecter
-</button>
-
-<div
-  id="loginStatus"
-  class="status"
-></div>
-
-</div>
 
 <!-- INSCRIPTION -->
 
 <div class="card">
 
-<h2>Créer un compte</h2>
+  <h2>
+    Créer un compte
+  </h2>
 
-<input
-  id="registerUsername"
-  type="text"
-  autocomplete="username"
-  placeholder="Nom d'utilisateur"
->
 
-<div class="password-wrap">
+  <input
+    id="registerUsername"
+    type="text"
+    autocomplete="username"
+    placeholder="Nom d'utilisateur"
+  >
 
-<input
-  id="registerPassword"
-  type="password"
-  autocomplete="new-password"
-  placeholder="Mot de passe — 6 caractères minimum"
->
 
-<button
-  class="eye"
-  type="button"
-  onclick="togglePassword('registerPassword', this)"
->
-👁
-</button>
+  <div class="password-wrap">
 
-</div>
+    <input
+      id="registerPassword"
+      type="password"
+      autocomplete="new-password"
+      placeholder="Mot de passe — 6 caractères minimum"
+    >
 
-<div class="password-wrap">
+    <button
+      class="eye"
+      type="button"
+      onclick="togglePassword('registerPassword', this)"
+    >
+      👁
+    </button>
 
-<input
-  id="registerPassword2"
-  type="password"
-  autocomplete="new-password"
-  placeholder="Confirmer le mot de passe"
->
+  </div>
 
-<button
-  class="eye"
-  type="button"
-  onclick="togglePassword('registerPassword2', this)"
->
-👁
-</button>
 
-</div>
+  <div class="password-wrap">
 
-<button
-  id="registerButton"
-  class="btn primary"
-  type="button"
-  onclick="register()"
->
-Créer mon compte
-</button>
+    <input
+      id="registerPassword2"
+      type="password"
+      autocomplete="new-password"
+      placeholder="Confirmer le mot de passe"
+    >
 
-<div
-  id="registerStatus"
-  class="status"
-></div>
+    <button
+      class="eye"
+      type="button"
+      onclick="togglePassword('registerPassword2', this)"
+    >
+      👁
+    </button>
+
+  </div>
+
+
+  <button
+    id="registerButton"
+    class="btn primary"
+    type="button"
+    onclick="register()"
+  >
+    Créer mon compte
+  </button>
+
+
+  <div
+    id="registerStatus"
+    class="status"
+  ></div>
 
 </div>
 
 </section>
-
-<!-- =====================
-     INTERFACE APPLICATION
-===================== -->
+<!-- =====================================================
+     DASHBOARD
+===================================================== -->
 
 <section
   id="dashboard"
   class="${loggedIn ? "" : "hidden"}"
 >
 
+
 <div class="center">
 
-<div class="logo">
-⚽
+  <div class="logo">
+
+    <svg
+      viewBox="0 0 100 100"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+
+      <path
+        d="M50 82 C49 65 48 47 43 28"
+        stroke="#21C55D"
+        stroke-width="8"
+        fill="none"
+        stroke-linecap="round"
+      />
+
+      <path
+        d="M45 47 C25 45 17 33 16 19 C31 19 43 27 45 47Z"
+        fill="#21C55D"
+      />
+
+      <path
+        d="M49 58 C67 55 80 45 83 30 C68 30 55 38 49 58Z"
+        fill="#21C55D"
+      />
+
+      <path
+        d="M47 31 C58 23 68 13 67 4 C54 7 47 17 47 31Z"
+        fill="#21C55D"
+      />
+
+    </svg>
+
+  </div>
+
+
+  <h1>S-Drive</h1>
+
+
+  <p
+    id="welcomeText"
+    class="muted"
+  >
+    Bienvenue ${user ? escapeHtml(user.username) : ""}
+  </p>
+
+
+  <span class="badge">
+    🏅 Membre S-Drive
+  </span>
+
 </div>
 
-<h1>S-Drive</h1>
 
-<p
-  id="welcomeText"
-  class="muted"
->
-Bienvenue ${user ? escapeHtml(user.username) : ""}
-</p>
-
-<span class="badge">
-🏅 Membre S-Drive
-</span>
-
-</div>
+<!-- UTILISATEUR -->
 
 <div
   id="userBox"
   class="user-box"
 >
 
-👤
+  👤
 
-<strong>
-${user ? escapeHtml(user.username) : ""}
-</strong>
+  <strong>
+    ${user ? escapeHtml(user.username) : ""}
+  </strong>
 
-<br>
+  <br>
 
-<span class="muted">
-Compte connecté
-</span>
+  <span class="muted">
+    Compte connecté
+  </span>
 
 </div>
 
-<!-- =====================
+
+<!-- =====================================================
      ANALYSE
-===================== -->
+===================================================== -->
 
 <div class="card">
 
-<h2>
-Analyse des matchs
-</h2>
+  <h2>
+    ⚽ Analyse des matchs
+  </h2>
 
-<div class="notice">
 
-Choisissez le type d'analyse
-que vous souhaitez.
+  <div class="notice">
+
+    Choisissez le type d'analyse
+    que vous souhaitez.
+
+  </div>
+
+
+  <div
+    id="choice2"
+    class="choice selected"
+    onclick="selectOdds(2)"
+  >
+
+    <strong>
+      Cote 2
+    </strong>
+
+    <small>
+      Analyse rapide — environ 2 à 3 minutes
+    </small>
+
+  </div>
+
+
+  <div
+    id="choice10"
+    class="choice"
+    onclick="selectOdds(10)"
+  >
+
+    <strong>
+      Cote 10
+    </strong>
+
+    <small>
+      Analyse complète — environ 7 à 8 minutes
+    </small>
+
+  </div>
+
+
+  <div class="price">
+    1 000 F
+  </div>
+
+
+  <p class="muted center">
+    Paiement unique pour l'analyse.
+  </p>
+
+
+  <a
+    class="btn green"
+    href="${WAVE_URL}"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+    💳 Payer 1 000 F avec Wave
+  </a>
+
+
+  <button
+    class="btn primary"
+    type="button"
+    onclick="sendMatchScreenshot()"
+  >
+    📸 Envoyer la capture des matchs
+  </button>
+
+
+  <div
+    id="analysisStatus"
+    class="status"
+  ></div>
 
 </div>
 
-<div
-  id="choice2"
-  class="choice selected"
-  onclick="selectOdds(2)"
->
 
-<strong>
-Cote 2
-</strong>
-
-<small>
-Analyse rapide — environ 2 à 3 minutes
-</small>
-
-</div>
-
-<div
-  id="choice10"
-  class="choice"
-  onclick="selectOdds(10)"
->
-
-<strong>
-Cote 10
-</strong>
-
-<small>
-Analyse complète — environ 7 à 8 minutes
-</small>
-
-</div>
-
-<div class="price">
-1 000 F
-</div>
-
-<p class="muted center">
-Paiement unique pour l'analyse.
-</p>
-
-<a
-  class="btn green"
-  href="${WAVE_URL}"
-  target="_blank"
-  rel="noopener noreferrer"
->
-💳 Payer 1 000 F avec Wave
-</a>
-
-<button
-  class="btn primary"
-  type="button"
-  onclick="sendMatchScreenshot()"
->
-📸 Envoyer la capture des matchs
-</button>
-
-<div
-  id="analysisStatus"
-  class="status"
-></div>
-
-</div>
-
-<!-- =====================
-     ENVOYER VOTRE CAPTURE
-===================== -->
+<!-- =====================================================
+     WHATSAPP / TELEGRAM
+===================================================== -->
 
 <div class="card">
 
-<h2>
-📲 Envoyer votre capture
-</h2>
+  <h2>
+    📲 Envoyer votre capture
+  </h2>
 
-<p class="muted">
-Choisissez votre moyen de contact pour envoyer
-votre capture de matchs à analyser.
-</p>
 
-<a
-  class="btn green"
-  href="${
-    whatsappLink(
-      "Bonjour S-Drive 👋\\n\\nJe souhaite faire analyser mon coupon/match.\\n\\nJe vous envoie ma capture pour analyse."
-    ) || "#"
-  }"
-  target="_blank"
-  rel="noopener noreferrer"
->
-🟢 WhatsApp — Envoyer ma capture
-</a>
+  <p class="muted">
 
-<a
-  class="btn secondary"
-  href="${TELEGRAM_URL}"
-  target="_blank"
-  rel="noopener noreferrer"
->
-🔵 Telegram — Envoyer ma capture
-</a>
+    Après votre paiement,
+    envoyez votre capture de matchs
+    à S-Drive pour analyse.
+
+  </p>
+
+
+  <a
+    class="btn green"
+    href="${whatsappLink(WHATSAPP_MESSAGE) || "#"}"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+    🟢 WhatsApp — Envoyer ma capture
+  </a>
+
+
+  <a
+    class="btn secondary"
+    href="${telegramLink(TELEGRAM_MESSAGE)}"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+    🔵 Telegram — Envoyer ma capture
+  </a>
+
+
+  <div class="notice">
+
+    <strong>
+      Message automatique
+    </strong>
+
+    <br><br>
+
+    Lorsque vous ouvrez WhatsApp,
+    le message de demande d'analyse
+    sera automatiquement préparé.
+
+  </div>
 
 </div>
 
-<!-- =====================
-     COMMUNAUTÉ S-DRIVE
-===================== -->
+
+<!-- =====================================================
+     BOOKMAKERS
+===================================================== -->
 
 <div class="card">
 
-<h2>
-👥 Communauté S-Drive
-</h2>
+  <h2>
+    🎯 Bookmakers
+  </h2>
 
-<p class="muted">
-Rejoignez nos communautés pour recevoir
-les informations et échanger avec les autres membres.
-</p>
 
-<a
-  class="btn primary"
-  href="${WHATSAPP_GROUP_URL}"
-  target="_blank"
-  rel="noopener noreferrer"
->
-🟢 Groupe WhatsApp
-</a>
+  <p class="muted">
+    Retrouvez nos différents bookmakers.
+  </p>
 
-<a
-  class="btn secondary"
-  href="${TELEGRAM_GROUP_URL}"
-  target="_blank"
-  rel="noopener noreferrer"
->
-🔵 Groupe Telegram
-</a>
+
+  <div class="bookmaker">
+
+    <div class="bookmaker-info">
+
+      <div class="bookmaker-icon">
+        1
+      </div>
+
+      <div>
+        <div class="bookmaker-name">
+          1Win
+        </div>
+
+        <small class="muted">
+          Bookmaker
+        </small>
+      </div>
+
+    </div>
+
+
+    <a
+      class="btn primary bookmaker-button"
+      href="${WIN1_URL}"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      Ouvrir
+    </a>
+
+  </div>
+
+
+  <div class="bookmaker">
+
+    <div class="bookmaker-info">
+
+      <div class="bookmaker-icon">
+        🎲
+      </div>
+
+      <div>
+        <div class="bookmaker-name">
+          Paripesa
+        </div>
+
+        <small class="muted">
+          Bookmaker
+        </small>
+      </div>
+
+    </div>
+
+
+    <a
+      class="btn primary bookmaker-button"
+      href="${PARIPESA_URL}"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      Ouvrir
+    </a>
+
+  </div>
+
+
+  <div class="bookmaker">
+
+    <div class="bookmaker-info">
+
+      <div class="bookmaker-icon">
+        🎟️
+      </div>
+
+      <div>
+        <div class="bookmaker-name">
+          Loto
+        </div>
+
+        <small class="muted">
+          Bookmaker
+        </small>
+      </div>
+
+    </div>
+
+
+    <a
+      class="btn primary bookmaker-button"
+      href="${LOTO_URL}"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      Ouvrir
+    </a>
+
+  </div>
 
 </div>
 
-<!-- =====================
-     LIENS PARTENAIRES
-===================== -->
+
+<!-- =====================================================
+     COMMUNAUTÉ
+===================================================== -->
+<div class="card">
+
+  <h2>
+    👥 Communauté S-Drive
+  </h2>
+
+
+  <p class="muted">
+
+    Rejoignez notre communauté
+    pour recevoir les informations
+    et échanger avec les membres.
+
+  </p>
+
+
+  <a
+    class="btn primary"
+    href="${WHATSAPP_GROUP_URL}"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+    🟢 Groupe WhatsApp
+  </a>
+
+
+  <a
+    class="btn secondary"
+    href="${TELEGRAM_GROUP_URL}"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+    🔵 Groupe Telegram
+  </a>
+
+</div>
+
+
+<!-- =====================================================
+     RÉSEAUX SOCIAUX
+===================================================== -->
 
 <div class="card">
 
-<h2>
-🔗 Nos liens
-</h2>
+  <h2>
+    🌐 Nos réseaux
+  </h2>
 
-<p class="muted">
-Retrouvez nos plateformes et nos réseaux.
-</p>
 
-<a
-  class="btn primary"
-  href="https://one-vv3942.com/?p=gc9k&sub1=DM07"
-  target="_blank"
-  rel="noopener noreferrer"
->
-🟢 1WIN
-</a>
+  <a
+    class="btn secondary"
+    href="${TIKTOK_URL}"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+    🎵 TikTok
+  </a>
 
-<a
-  class="btn primary"
-  href="https://combodef.com/L?tag=d_4081071m_60651c_&site=4081071&ad=60651"
-  target="_blank"
-  rel="noopener noreferrer"
->
-🔵 Paripesa
-</a>
 
-<a
-  class="btn primary"
-  href="https://jdnlotto.com/register?promo=123"
-  target="_blank"
-  rel="noopener noreferrer"
->
-🟡 Loto
-</a>
-
-<a
-  class="btn secondary"
-  href="https://www.tiktok.com/@batelemi92?_r=1&_t=ZS-99cD47Jhd00"
-  target="_blank"
-  rel="noopener noreferrer"
->
-🎵 TikTok
-</a>
-
-<a
-  class="btn secondary"
-  href="https://www.facebook.com/share/1L96SqLnZT/"
-  target="_blank"
-  rel="noopener noreferrer"
->
-🔵 Facebook
-</a>
+  <a
+    class="btn secondary"
+    href="${FACEBOOK_URL}"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+    📘 Facebook
+  </a>
 
 </div>
 
-<!-- =====================
+
+<!-- =====================================================
      PARTAGE
-===================== -->
+===================================================== -->
 
 <div class="card">
 
-<h2>
-Partager S-Drive
-</h2>
+  <h2>
+    📤 Partager S-Drive
+  </h2>
 
-<p class="muted">
-Invitez vos amis à découvrir S-Drive.
-</p>
 
-<div class="share-box">
+  <p class="muted">
+    Invitez vos amis à découvrir S-Drive.
+  </p>
 
-<button
-  class="btn secondary"
-  onclick="copyAppLink()"
->
-📋 Copier le lien
-</button>
 
-<button
-  class="btn secondary"
-  onclick="shareApp()"
->
-📤 Partager
-</button>
+  <div class="share-box">
+
+    <button
+      class="btn secondary"
+      onclick="copyAppLink()"
+    >
+      📋 Copier le lien
+    </button>
+
+
+    <button
+      class="btn secondary"
+      onclick="shareApp()"
+    >
+      📤 Partager
+    </button>
+
+  </div>
+
+
+  <div
+    id="shareStatus"
+    class="status"
+  ></div>
 
 </div>
 
-<div
-  id="shareStatus"
-  class="status"
-></div>
 
-</div>
-
-<!-- =====================
+<!-- =====================================================
      CONDITIONS
-===================== -->
+===================================================== -->
 
 <div class="card">
 
-<h2>
-Conditions d'utilisation
-</h2>
+  <h2>
+    📋 Conditions d'utilisation
+  </h2>
 
-<div class="notice">
 
-<strong>Cote 2</strong>
+  <div class="notice">
 
-<br><br>
+    <strong>
+      Cote 2
+    </strong>
 
-Après paiement et réception de votre capture,
-S-Drive analyse vos matchs de cote 2.
+    <br><br>
 
-<br><br>
+    Après paiement et réception
+    de votre capture, S-Drive analyse
+    vos matchs de cote 2.
 
-Délai indicatif :
-<strong>2 à 3 minutes</strong>.
+    <br><br>
 
-<br><br>
+    Délai indicatif :
+    <strong>
+      2 à 3 minutes
+    </strong>.
 
-Si le coupon de cote 2 analysé et envoyé
-par S-Drive est validé après votre pari,
-aucun montant supplémentaire ne sera demandé.
+    <br><br>
 
-<br><br>
+    Si le coupon de cote 2 analysé
+    et envoyé par S-Drive est validé
+    après votre pari, aucun montant
+    supplémentaire ne sera demandé.
 
-Si le coupon de cote 2 n'est pas validé,
-vous pouvez réclamer un remboursement de
-<strong>500 F</strong>.
+    <br><br>
+
+    Si le coupon de cote 2 n'est pas
+    validé, vous pouvez réclamer
+    un remboursement de
+    <strong>
+      500 F
+    </strong>.
+
+  </div>
+
+
+  <div class="notice">
+
+    <strong>
+      Cote 10
+    </strong>
+
+    <br><br>
+
+    Délai indicatif :
+    <strong>
+      7 à 8 minutes
+    </strong>.
+
+    <br><br>
+
+    Pour une analyse de cote 10,
+    aucun remboursement n'est prévu
+    après le gain ou la perte du pari.
+
+  </div>
+
+
+  <p class="muted">
+
+    Le paiement de l'analyse est de
+    <strong>
+      1 000 F
+    </strong>.
+
+  </p>
 
 </div>
 
-<div class="notice">
 
-<strong>Cote 10</strong>
-
-<br><br>
-
-Délai indicatif :
-<strong>7 à 8 minutes</strong>.
-
-<br><br>
-
-Pour une analyse de cote 10,
-aucun remboursement n'est prévu après
-le gain ou la perte du pari.
-
-</div>
-
-<p class="muted">
-
-Le paiement de l'analyse est de
-<strong>1 000 F</strong>.
-
-</p>
-
-</div>
+<!-- DÉCONNEXION -->
 
 <button
   class="btn danger"
   onclick="logout()"
 >
-Se déconnecter
+  🚪 Se déconnecter
 </button>
+
 
 </section>
 
+
 <footer>
-S-Drive — Analyse professionnelle des matchs
+
+  S-Drive — Analyse des matchs
+
 </footer>
+
 
 </main>
 
+
 <script>
 
-/* =========================
-   VARIABLES
-========================= */
-
+/* =====================================================
+   VARIABLES JAVASCRIPT
+===================================================== */
 let selectedOdds = 2;
 
-/* =========================
+const initialUser =
+  ${initialUser};
+
+
+/* =====================================================
    UTILITAIRES
-========================= */
+===================================================== */
 
-function escapeHtml(value) {
-
-  return String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-
-}
-
-function showStatus(id, message, type = "") {
+function showStatus(
+  id,
+  message,
+  type = ""
+) {
 
   const element =
     document.getElementById(id);
 
   if (!element) return;
 
-  element.textContent = message;
+  element.textContent =
+    message;
 
   element.className =
     "status " + type;
 
 }
 
-function setLoading(id, loading, text) {
+
+function setLoading(
+  id,
+  loading,
+  text
+) {
 
   const button =
     document.getElementById(id);
 
   if (!button) return;
 
-  button.disabled = loading;
+  button.disabled =
+    loading;
 
   button.textContent =
-    loading ? "Patientez..." : text;
+    loading
+      ? "Patientez..."
+      : text;
 
 }
 
-/* =========================
-   MOT DE PASSE
-========================= */
 
-function togglePassword(id, button) {
+/* =====================================================
+   MOT DE PASSE
+===================================================== */
+
+function togglePassword(
+  id,
+  button
+) {
 
   const input =
     document.getElementById(id);
 
   if (!input) return;
 
+
   if (input.type === "password") {
 
     input.type = "text";
-    button.textContent = "🙈";
+
+    button.textContent =
+      "🙈";
 
   } else {
 
     input.type = "password";
-    button.textContent = "👁";
+
+    button.textContent =
+      "👁";
 
   }
 
 }
 
-/* =========================
-   DASHBOARD
-========================= */
+
+/* =====================================================
+   AFFICHER LE DASHBOARD
+===================================================== */
 
 function showDashboard(user) {
 
   document
     .getElementById("auth")
-    .classList.add("hidden");
+    .classList
+    .add("hidden");
+
 
   document
     .getElementById("dashboard")
-    .classList.remove("hidden");
+    .classList
+    .remove("hidden");
+
 
   if (user) {
 
     document
       .getElementById("welcomeText")
       .textContent =
-        "Bienvenue " + user.username;
+        "Bienvenue " +
+        user.username;
+
 
     document
       .getElementById("userBox")
@@ -1270,39 +2555,95 @@ function showDashboard(user) {
 
   }
 
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth"
-  });
+
+  showLoadingScreen(
+    "Ouverture de S-Drive..."
+  );
 
 }
 
-/* =========================
-   INSCRIPTION
-========================= */
 
+/* =====================================================
+   ÉCRAN DE CHARGEMENT
+===================================================== */
+
+function showLoadingScreen(
+  text
+) {
+
+  const screen =
+    document.getElementById(
+      "loadingScreen"
+    );
+
+  if (!screen) return;
+
+
+  const textElement =
+    screen.querySelector(
+      ".loading-text"
+    );
+
+
+  if (textElement && text) {
+
+    textElement.textContent =
+      text;
+
+  }
+
+
+  screen.classList.remove(
+    "hidden-loading"
+  );
+
+
+  setTimeout(() => {
+
+    screen.classList.add(
+      "hidden-loading"
+    );
+
+  }, 900);
+
+}
+
+
+/* =====================================================
+   INSCRIPTION
+===================================================== */
 async function register() {
 
   const username =
     document
-      .getElementById("registerUsername")
+      .getElementById(
+        "registerUsername"
+      )
       .value
       .trim();
 
+
   const password =
     document
-      .getElementById("registerPassword")
+      .getElementById(
+        "registerPassword"
+      )
       .value;
+
 
   const password2 =
     document
-      .getElementById("registerPassword2")
+      .getElementById(
+        "registerPassword2"
+      )
       .value;
+
 
   showStatus(
     "registerStatus",
     ""
   );
+
 
   if (!username) {
 
@@ -1314,6 +2655,7 @@ async function register() {
 
   }
 
+
   if (username.length < 3) {
 
     return showStatus(
@@ -1324,7 +2666,12 @@ async function register() {
 
   }
 
-  if (!/^[a-zA-Z0-9_.-]+$/.test(username)) {
+
+  if (
+    !/^[a-zA-Z0-9_.-]+$/.test(
+      username
+    )
+  ) {
 
     return showStatus(
       "registerStatus",
@@ -1333,6 +2680,7 @@ async function register() {
     );
 
   }
+
 
   if (password.length < 6) {
 
@@ -1344,6 +2692,7 @@ async function register() {
 
   }
 
+
   if (password !== password2) {
 
     return showStatus(
@@ -1354,11 +2703,13 @@ async function register() {
 
   }
 
+
   setLoading(
     "registerButton",
     true,
     "Créer mon compte"
   );
+
 
   try {
 
@@ -1384,10 +2735,14 @@ async function register() {
         }
       );
 
+
     const data =
       await response
         .json()
-        .catch(() => ({}));
+        .catch(
+          () => ({})
+        );
+
 
     if (!response.ok) {
 
@@ -1400,11 +2755,13 @@ async function register() {
 
     }
 
+
     showStatus(
       "registerStatus",
       "Compte créé avec succès !",
       "success"
     );
+
 
     setTimeout(() => {
 
@@ -1412,7 +2769,8 @@ async function register() {
         data.user
       );
 
-    }, 500);
+    }, 400);
+
 
   } catch (error) {
 
@@ -1436,29 +2794,39 @@ async function register() {
 
 }
 
-/* =========================
-   CONNEXION
-========================= */
 
+/* =====================================================
+   CONNEXION
+===================================================== */
 async function login() {
 
   const username =
     document
-      .getElementById("loginUsername")
+      .getElementById(
+        "loginUsername"
+      )
       .value
       .trim();
 
+
   const password =
     document
-      .getElementById("loginPassword")
+      .getElementById(
+        "loginPassword"
+      )
       .value;
+
 
   showStatus(
     "loginStatus",
     ""
   );
 
-  if (!username || !password) {
+
+  if (
+    !username ||
+    !password
+  ) {
 
     return showStatus(
       "loginStatus",
@@ -1468,11 +2836,13 @@ async function login() {
 
   }
 
+
   setLoading(
     "loginButton",
     true,
     "Se connecter"
   );
+
 
   try {
 
@@ -1498,10 +2868,14 @@ async function login() {
         }
       );
 
+
     const data =
       await response
         .json()
-        .catch(() => ({}));
+        .catch(
+          () => ({})
+        );
+
 
     if (!response.ok) {
 
@@ -1514,11 +2888,13 @@ async function login() {
 
     }
 
+
     showStatus(
       "loginStatus",
       "Connexion réussie !",
       "success"
     );
+
 
     setTimeout(() => {
 
@@ -1527,6 +2903,7 @@ async function login() {
       );
 
     }, 300);
+
 
   } catch (error) {
 
@@ -1550,10 +2927,122 @@ async function login() {
 
 }
 
-/* =========================
-   SESSION
-========================= */
 
+/* =====================================================
+   MOT DE PASSE OUBLIÉ
+===================================================== */
+
+async function forgotPassword() {
+
+  const username =
+    document
+      .getElementById(
+        "loginUsername"
+      )
+      .value
+      .trim();
+
+
+  if (!username) {
+
+    showStatus(
+      "loginStatus",
+      "Entrez d'abord votre nom d'utilisateur.",
+      "error"
+    );
+
+    return;
+
+  }
+
+
+  showStatus(
+    "loginStatus",
+    "Création de votre demande...",
+    ""
+  );
+
+
+  try {
+
+    const response =
+      await fetch(
+        "/api/forgot-password",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+
+          body:
+            JSON.stringify({
+              username
+            })
+        }
+      );
+
+
+    const data =
+      await response
+        .json()
+        .catch(
+          () => ({})
+        );
+
+
+    if (!response.ok) {
+
+      return showStatus(
+        "loginStatus",
+        data.error ||
+          "Impossible de créer la demande.",
+        "error"
+      );
+
+    }
+
+
+    showStatus(
+      "loginStatus",
+      "Demande envoyée. Contactez S-Drive sur WhatsApp pour récupérer votre compte.",
+      "success"
+    );
+
+
+    if (data.whatsapp_url) {
+
+      setTimeout(() => {
+
+        window.open(
+          data.whatsapp_url,
+          "_blank"
+        );
+
+      }, 500);
+
+    }
+
+
+  } catch (error) {
+
+    console.error(error);
+
+    showStatus(
+      "loginStatus",
+      "Erreur de connexion au serveur.",
+      "error"
+    );
+
+  }
+
+}
+
+
+/* =====================================================
+   SESSION
+===================================================== */
 async function checkSession() {
 
   try {
@@ -1567,12 +3056,15 @@ async function checkSession() {
         }
       );
 
+
     if (!response.ok) {
       return;
     }
 
+
     const data =
       await response.json();
+
 
     if (
       data.success &&
@@ -1596,9 +3088,10 @@ async function checkSession() {
 
 }
 
-/* =========================
+
+/* =====================================================
    CHOIX COTE
-========================= */
+===================================================== */
 
 function selectOdds(type) {
 
@@ -1609,7 +3102,10 @@ function selectOdds(type) {
     return;
   }
 
-  selectedOdds = type;
+
+  selectedOdds =
+    type;
+
 
   document
     .getElementById("choice2")
@@ -1618,6 +3114,7 @@ function selectOdds(type) {
       "selected",
       type === 2
     );
+
 
   document
     .getElementById("choice10")
@@ -1629,9 +3126,10 @@ function selectOdds(type) {
 
 }
 
-/* =========================
-   CREER ANALYSE
-========================= */
+
+/* =====================================================
+   CRÉER UNE ANALYSE
+===================================================== */
 
 async function sendMatchScreenshot() {
 
@@ -1640,8 +3138,14 @@ async function sendMatchScreenshot() {
       "analysisStatus"
     );
 
+
   status.textContent =
     "Préparation de votre demande...";
+
+
+  status.className =
+    "status";
+
 
   try {
 
@@ -1667,10 +3171,14 @@ async function sendMatchScreenshot() {
         }
       );
 
+
     const data =
       await response
         .json()
-        .catch(() => ({}));
+        .catch(
+          () => ({})
+        );
+
 
     if (!response.ok) {
 
@@ -1685,11 +3193,13 @@ async function sendMatchScreenshot() {
 
     }
 
+
     status.textContent =
-      "Demande créée. Envoyez maintenant votre capture.";
+      "Demande créée. Ouverture de WhatsApp...";
 
     status.className =
       "status success";
+
 
     if (data.whatsapp_url) {
 
@@ -1714,9 +3224,10 @@ async function sendMatchScreenshot() {
 
 }
 
-/* =========================
-   PARTAGE
-========================= */
+
+/* =====================================================
+   COPIER LE LIEN
+===================================================== */
 
 async function copyAppLink() {
 
@@ -1726,11 +3237,13 @@ async function copyAppLink() {
       window.location.origin
     );
 
+
     showStatus(
       "shareStatus",
       "Lien copié avec succès !",
       "success"
     );
+
 
   } catch (error) {
 
@@ -1744,18 +3257,26 @@ async function copyAppLink() {
 
 }
 
+
+/* =====================================================
+   PARTAGER
+===================================================== */
+
 async function shareApp() {
 
   try {
 
-    if (navigator.share) {
+    if (
+      navigator.share
+    ) {
 
       await navigator.share({
 
-        title: "S-Drive",
+        title:
+          "S-Drive",
 
         text:
-          "Découvrez S-Drive — Analyse professionnelle de vos matchs.",
+          "Découvrez S-Drive — Analyse des matchs.",
 
         url:
           window.location.origin
@@ -1772,9 +3293,10 @@ async function shareApp() {
 
 }
 
-/* =========================
+
+/* =====================================================
    DÉCONNEXION
-========================= */
+===================================================== */
 
 async function logout() {
 
@@ -1783,24 +3305,51 @@ async function logout() {
     await fetch(
       "/api/logout",
       {
-        method: "POST",
-        credentials: "same-origin"
+        method:
+          "POST",
+
+        credentials:
+          "same-origin"
       }
     );
 
   } catch (error) {}
 
+
   location.reload();
 
 }
 
-/* =========================
-   INITIALISATION
-========================= */
 
+/* =====================================================
+   INITIALISATION
+===================================================== */
 document.addEventListener(
   "DOMContentLoaded",
   () => {
+
+    /*
+      On laisse l'écran de chargement
+      apparaître brièvement au démarrage.
+    */
+
+    setTimeout(() => {
+
+      const screen =
+        document.getElementById(
+          "loadingScreen"
+        );
+
+      if (screen) {
+
+        screen.classList.add(
+          "hidden-loading"
+        );
+
+      }
+
+    }, 800);
+
 
     checkSession();
 
@@ -1809,14 +3358,17 @@ document.addEventListener(
 
 </script>
 
+
 </body>
 
 </html>`);
+
 });
 
-/* =========================
-   INSCRIPTION API
-========================= */
+
+/* =========================================================
+   API INSCRIPTION
+========================================================= */
 
 app.post(
   "/api/register",
@@ -1831,30 +3383,40 @@ app.post(
           .trim()
           .toLowerCase();
 
+
       const password =
         String(
           req.body.password || ""
         );
 
+
       if (!username) {
 
         return res.status(400).json({
+
           success: false,
+
           error:
             "Veuillez entrer un nom d'utilisateur."
+
         });
 
       }
+
 
       if (username.length < 3) {
 
         return res.status(400).json({
+
           success: false,
+
           error:
             "Le nom d'utilisateur doit contenir au moins 3 caractères."
+
         });
 
       }
+
 
       if (
         !/^[a-zA-Z0-9_.-]+$/.test(
@@ -1863,37 +3425,54 @@ app.post(
       ) {
 
         return res.status(400).json({
+
           success: false,
+
           error:
             "Le nom d'utilisateur contient des caractères non autorisés."
+
         });
 
       }
+
 
       if (password.length < 6) {
 
         return res.status(400).json({
+
           success: false,
+
           error:
             "Le mot de passe doit contenir au moins 6 caractères."
+
         });
 
       }
 
+
       const exists =
-        db.prepare(
-          "SELECT id FROM users WHERE username = ?"
-        ).get(username);
+        db
+          .prepare(
+            "SELECT id FROM users WHERE username = ?"
+          )
+          .get(
+            username
+          );
+
 
       if (exists) {
 
         return res.status(409).json({
+
           success: false,
+
           error:
             "Ce nom d'utilisateur existe déjà. Choisissez-en un autre."
+
         });
 
       }
+
 
       const hash =
         await bcrypt.hash(
@@ -1901,23 +3480,28 @@ app.post(
           10
         );
 
+
       const result =
-        db.prepare(
-          `INSERT INTO users
-           (username, name, phone, password_hash, badge)
-           VALUES (?, ?, ?, ?, ?)`
-        ).run(
-          username,
-          username,
-          null,
-          hash,
-          "Membre S-Drive"
-        );
+        db
+          .prepare(
+            `INSERT INTO users
+             (username, name, phone, password_hash, badge)
+             VALUES (?, ?, ?, ?, ?)`
+          )
+          .run(
+            username,
+            username,
+            null,
+            hash,
+            "Membre S-Drive"
+          );
+
 
       req.session.userId =
         Number(
           result.lastInsertRowid
         );
+
 
       res.status(201).json({
 
@@ -1933,9 +3517,11 @@ app.post(
               result.lastInsertRowid
             ),
 
-          username,
+          username:
+            username,
 
-          name: username,
+          name:
+            username,
 
           badge:
             "Membre S-Drive"
@@ -1944,12 +3530,14 @@ app.post(
 
       });
 
+
     } catch (error) {
 
       console.error(
         "ERREUR REGISTER:",
         error
       );
+
 
       res.status(500).json({
 
@@ -1965,10 +3553,10 @@ app.post(
   }
 );
 
-/* =========================
-   CONNEXION API
-========================= */
 
+/* =========================================================
+   API CONNEXION
+========================================================= */
 app.post(
   "/api/login",
   async (req, res) => {
@@ -1982,10 +3570,12 @@ app.post(
           .trim()
           .toLowerCase();
 
+
       const password =
         String(
           req.body.password || ""
         );
+
 
       if (
         !username ||
@@ -2003,19 +3593,25 @@ app.post(
 
       }
 
+
       const user =
-        db.prepare(
-          `SELECT
-             id,
-             username,
-             name,
-             phone,
-             password_hash,
-             badge,
-             created_at
-           FROM users
-           WHERE username = ?`
-        ).get(username);
+        db
+          .prepare(
+            `SELECT
+              id,
+              username,
+              name,
+              phone,
+              password_hash,
+              badge,
+              created_at
+             FROM users
+             WHERE username = ?`
+          )
+          .get(
+            username
+          );
+
 
       if (!user) {
 
@@ -2030,11 +3626,13 @@ app.post(
 
       }
 
+
       const valid =
         await bcrypt.compare(
           password,
           user.password_hash
         );
+
 
       if (!valid) {
 
@@ -2049,8 +3647,10 @@ app.post(
 
       }
 
+
       req.session.userId =
         user.id;
+
 
       res.json({
 
@@ -2077,12 +3677,14 @@ app.post(
 
       });
 
+
     } catch (error) {
 
       console.error(
         "ERREUR LOGIN:",
         error
       );
+
 
       res.status(500).json({
 
@@ -2098,9 +3700,10 @@ app.post(
   }
 );
 
-/* =========================
-   UTILISATEUR CONNECTÉ
-========================= */
+
+/* =========================================================
+   API UTILISATEUR
+========================================================= */
 
 app.get(
   "/api/me",
@@ -2108,6 +3711,7 @@ app.get(
 
     const user =
       getCurrentUser(req);
+
 
     if (!user) {
 
@@ -2122,6 +3726,7 @@ app.get(
 
     }
 
+
     res.json({
 
       success: true,
@@ -2133,9 +3738,10 @@ app.get(
   }
 );
 
-/* =========================
-   DÉCONNEXION API
-========================= */
+
+/* =========================================================
+   API DÉCONNEXION
+========================================================= */
 
 app.post(
   "/api/logout",
@@ -2157,6 +3763,7 @@ app.post(
 
         }
 
+
         res.json({
 
           success: true
@@ -2169,9 +3776,140 @@ app.post(
   }
 );
 
-/* =========================
-   CRÉER UNE DEMANDE
-========================= */
+
+/*
+=========================================================
+   API MOT DE PASSE OUBLIÉ
+========================================================= */
+
+app.post(
+  "/api/forgot-password",
+  (req, res) => {
+
+    try {
+
+      const username =
+        String(
+          req.body.username || ""
+        )
+          .trim()
+          .toLowerCase();
+
+
+      if (!username) {
+
+        return res.status(400).json({
+
+          success: false,
+
+          error:
+            "Veuillez entrer votre nom d'utilisateur."
+
+        });
+
+      }
+
+
+      const user =
+        db
+          .prepare(
+            `SELECT id, username
+             FROM users
+             WHERE username = ?`
+          )
+          .get(
+            username
+          );
+
+
+      if (!user) {
+
+        return res.status(404).json({
+
+          success: false,
+
+          error:
+            "Aucun compte trouvé avec ce nom d'utilisateur."
+
+        });
+
+      }
+
+
+      const result =
+        db
+          .prepare(
+            `INSERT INTO password_resets
+             (user_id, status)
+             VALUES (?, 'pending')`
+          )
+          .run(
+            user.id
+          );
+
+
+      const message = [
+
+        "Bonjour S-Drive 👋",
+
+        "",
+
+        "Je souhaite récupérer mon compte.",
+
+        "",
+
+        "Nom d'utilisateur : " +
+          user.username,
+
+        "",
+
+        "Référence de récupération : SD-RESET-" +
+          result.lastInsertRowid
+
+      ].join("\n");
+
+
+      res.json({
+
+        success: true,
+
+        message:
+          "Demande créée.",
+
+        whatsapp_url:
+          whatsappLink(
+            message
+          )
+
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        "ERREUR PASSWORD RESET:",
+        error
+      );
+
+
+      res.status(500).json({
+
+        success: false,
+
+        error:
+          "Impossible de créer la demande."
+
+      });
+
+    }
+
+  }
+);
+
+
+/* =========================================================
+   API CRÉER ANALYSE
+========================================================= */
 
 app.post(
   "/api/create-analysis",
@@ -2184,6 +3922,7 @@ app.post(
         Number(
           req.body.odds_type
         );
+
 
       if (
         odds !== 2 &&
@@ -2201,8 +3940,10 @@ app.post(
 
       }
 
+
       const user =
         getCurrentUser(req);
+
 
       if (!user) {
 
@@ -2217,32 +3958,49 @@ app.post(
 
       }
 
+
       const result =
-        db.prepare(
-          `INSERT INTO analyses
-           (user_id, odds_type, status)
-           VALUES (?, ?, 'payment_pending')`
-        ).run(
-          user.id,
-          odds
-        );
+        db
+          .prepare(
+            `INSERT INTO analyses
+             (user_id, odds_type, status)
+             VALUES (?, ?, 'payment_pending')`
+          )
+          .run(
+            user.id,
+            odds
+          );
+
 
       const message = [
+
         "Bonjour S-Drive 👋",
+
         "",
+
         "Je viens de créer une demande d'analyse.",
+
         "",
+
         "Client : " +
           user.username,
+
         "",
+
         "Type : Cote " +
           odds,
+
         "",
+
         "Référence : SD-" +
           result.lastInsertRowid,
+
         "",
+
         "Je vais envoyer la capture de mes matchs."
+
       ].join("\n");
+
 
       res.status(201).json({
 
@@ -2257,9 +4015,17 @@ app.post(
           ),
 
         whatsapp_url:
-          whatsappLink(message)
+          whatsappLink(
+            message
+          ),
+
+        telegram_url:
+          telegramLink(
+            message
+          )
 
       });
+
 
     } catch (error) {
 
@@ -2267,6 +4033,7 @@ app.post(
         "ERREUR ANALYSE:",
         error
       );
+
 
       res.status(500).json({
 
@@ -2282,32 +4049,11 @@ app.post(
   }
 );
 
-/* =========================
-   SANTÉ DU SERVEUR
-========================= */
 
-app.get(
-  "/api/health",
-  (req, res) => {
-
-    res.json({
-
-      success: true,
-
-      message:
-        "S-Drive fonctionne correctement.",
-
-      time:
-        new Date().toISOString()
-
-    });
-
-  }
-);
-
-/* =========================
-   ROUTE INCONNUE
-========================= */
+/*
+=========================================================
+   ROUTES INCONNUES
+========================================================= */
 
 app.use(
   (req, res) => {
@@ -2327,6 +4073,7 @@ app.use(
 
     }
 
+
     res.status(404).send(
       "Page introuvable."
     );
@@ -2334,9 +4081,10 @@ app.use(
   }
 );
 
-/* =========================
+
+/* =========================================================
    DÉMARRAGE
-========================= */
+========================================================= */
 
 app.listen(
   PORT,
