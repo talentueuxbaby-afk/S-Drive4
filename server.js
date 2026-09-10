@@ -79,38 +79,44 @@ app.post("/api/register",async(req,res)=>{
   }
 });
 
-app.post("/api/login",async(req,res)=>{
-  try{
-    const phoneNumber=phone(req.body.phone);
-    const password=String(req.body.password||"");
+app.post("/api/login", async (req, res) => {
+  try {
+    const phoneNumber = phone(req.body.phone);
+    const password = String(req.body.password || "");
 
-    const u=db.prepare(
+    const u = db.prepare(
       "SELECT * FROM users WHERE phone=?"
     ).get(phoneNumber);
 
-    if(!u){
-      return res.status(401).json({error:"Numéro ou mot de passe incorrect"});
+    if (!u) {
+      return res.status(401).json({
+        error: "Numéro ou mot de passe incorrect"
+      });
     }
 
-    const ok=await bcrypt.compare(password,u.password_hash);
+    const ok = await bcrypt.compare(password, u.password_hash);
 
-    if(!ok){
-      return res.status(401).json({error:"Numéro ou mot de passe incorrect"});
+    if (!ok) {
+      return res.status(401).json({
+        error: "Mot de passe incorrect"
+      });
     }
 
-    req.session.userId=u.id;
+    req.session.userId = u.id;
 
     res.json({
-      success:true,
-      message:"Connexion réussie",
-      user:currentUser(req)
+      success: true,
+      message: "Connexion réussie",
+      user: currentUser(req)
     });
-  }catch(e){
+
+  } catch (e) {
     console.error(e);
-    res.status(500).json({error:"Erreur serveur"});
+    res.status(500).json({
+      error: "Erreur serveur"
+    });
   }
 });
-
 app.get("/api/me",(req,res)=>{
   const u=currentUser(req);
   res.json({connected:!!u,user:u});
