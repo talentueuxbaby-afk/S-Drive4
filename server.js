@@ -1,25 +1,3 @@
-Oui. On va repartir proprement avec un seul code complet server.js, prêt à copier-coller.
-J’ai intégré :
-✅ Connexion / inscription
-✅ Mot de passe oublié
-✅ Logo S-Drive en haut
-✅ Petit écran de chargement après inscription/connexion
-✅ WhatsApp avec message automatique prérempli
-✅ Telegram avec message préparé
-✅ Création d’une demande d’analyse
-✅ Cote 2 / Cote 10
-✅ Paiement Wave
-✅ Section Bookmakers uniquement : 1Win, Paripesa et Loto
-✅ Groupe WhatsApp
-✅ Groupe Telegram
-✅ TikTok et Facebook séparément
-✅ Partage de l'application
-✅ Déconnexion
-✅ Base SQLite
-✅ Sessions utilisateurs
-✅ Mots de passe sécurisés avec bcrypt
-✅ Les liens sont centralisés au début du fichier pour pouvoir les modifier facilement
-Important : remplace tout le contenu actuel de ton server.js par le code ci-dessous. Ne colle rien avant ni après.
 const express = require("express");
 const session = require("express-session");
 const bcrypt = require("bcryptjs");
