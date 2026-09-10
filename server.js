@@ -16,15 +16,16 @@ const WAVE_URL =
   "https://pay.wave.com/m/M_ci_kpNTVGT9JGah/c/ci/?amount=1000";
 
 const WHATSAPP_NUMBER =
-  process.env.WHATSAPP_NUMBER || "2250152171974";
+  process.env.WHATSAPP_NUMBER ||
+  "0152171974";
+
+const TELEGRAM_URL =
+  process.env.TELEGRAM_URL ||
+  "https://t.me/Sdrive12";
 
 const WHATSAPP_GROUP_URL =
   process.env.WHATSAPP_GROUP_URL ||
   "https://chat.whatsapp.com/GikWdoQLZ8TFDHK2rTHH8T?s=cl&p=a&mlu=4&ilr=4";
-
-const TELEGRAM_URL =
-  process.env.TELEGRAM_URL ||
-  "https://t.me/sdrive123";
 
 const TELEGRAM_GROUP_URL =
   process.env.TELEGRAM_GROUP_URL ||
@@ -64,10 +65,6 @@ const db = new Database(
 );
 
 db.pragma("foreign_keys = ON");
-
-/*
-   Création initiale des tables.
-*/
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
@@ -111,23 +108,18 @@ function columnExists(table, column) {
   return columns.some((c) => c.name === column);
 }
 
-/*
-   Si une ancienne base possède déjà la table users
-   sans username, on ajoute username.
-*/
-
 if (!columnExists("users", "username")) {
   try {
-    db.exec(`ALTER TABLE users ADD COLUMN username TEXT`);
+    db.exec(
+      `ALTER TABLE users ADD COLUMN username TEXT`
+    );
   } catch (e) {
-    console.log("Migration username:", e.message);
+    console.log(
+      "Migration username:",
+      e.message
+    );
   }
 }
-
-/*
-   Remplit username pour les anciens comptes.
-   Cela permet de ne pas casser les anciens utilisateurs.
-*/
 
 try {
   const oldUsers = db
@@ -145,7 +137,9 @@ try {
         .toLowerCase()
         .replace(/[^a-z0-9]/g, "");
 
-    if (!base) base = "membre";
+    if (!base) {
+      base = "membre";
+    }
 
     let username = base;
     let number = 1;
@@ -166,7 +160,10 @@ try {
     ).run(username, u.id);
   }
 } catch (e) {
-  console.log("Migration utilisateurs:", e.message);
+  console.log(
+    "Migration utilisateurs:",
+    e.message
+  );
 }
 
 /* =========================
@@ -174,11 +171,19 @@ try {
 ========================= */
 
 function getCurrentUser(req) {
-  if (!req.session.userId) return null;
+  if (!req.session.userId) {
+    return null;
+  }
 
   return db
     .prepare(
-      `SELECT id, username, name, phone, badge, created_at
+      `SELECT
+        id,
+        username,
+        name,
+        phone,
+        badge,
+        created_at
        FROM users
        WHERE id = ?`
     )
@@ -206,12 +211,13 @@ function escapeHtml(value) {
 }
 
 function whatsappLink(message) {
-  const number = String(WHATSAPP_NUMBER).replace(
-    /[^\d]/g,
-    ""
-  );
+  const number = String(
+    WHATSAPP_NUMBER
+  ).replace(/[^\d]/g, "");
 
-  if (!number) return null;
+  if (!number) {
+    return null;
+  }
 
   return (
     "https://wa.me/" +
@@ -656,7 +662,6 @@ Application d'analyse des matchs et coupons du jour.
 
 </div>
 
-
 <!-- CONNEXION -->
 
 <div class="card">
@@ -704,7 +709,6 @@ Se connecter
 ></div>
 
 </div>
-
 
 <!-- INSCRIPTION -->
 
@@ -775,7 +779,6 @@ Créer mon compte
 
 </section>
 
-
 <!-- =====================
      INTERFACE APPLICATION
 ===================== -->
@@ -806,7 +809,6 @@ Bienvenue ${user ? escapeHtml(user.username) : ""}
 
 </div>
 
-
 <div
   id="userBox"
   class="user-box"
@@ -826,8 +828,9 @@ Compte connecté
 
 </div>
 
-
-<!-- ANALYSE -->
+<!-- =====================
+     ANALYSE
+===================== -->
 
 <div class="card">
 
@@ -841,7 +844,6 @@ Choisissez le type d'analyse
 que vous souhaitez.
 
 </div>
-
 
 <div
   id="choice2"
@@ -859,7 +861,6 @@ Analyse rapide — environ 2 à 3 minutes
 
 </div>
 
-
 <div
   id="choice10"
   class="choice"
@@ -876,7 +877,6 @@ Analyse complète — environ 7 à 8 minutes
 
 </div>
 
-
 <div class="price">
 1 000 F
 </div>
@@ -884,7 +884,6 @@ Analyse complète — environ 7 à 8 minutes
 <p class="muted center">
 Paiement unique pour l'analyse.
 </p>
-
 
 <a
   class="btn green"
@@ -894,7 +893,6 @@ Paiement unique pour l'analyse.
 >
 💳 Payer 1 000 F avec Wave
 </a>
-
 
 <button
   class="btn primary"
@@ -911,8 +909,9 @@ Paiement unique pour l'analyse.
 
 </div>
 
-
-<!-- WHATSAPP / TELEGRAM -->
+<!-- =====================
+     ENVOYER VOTRE CAPTURE
+===================== -->
 
 <div class="card">
 
@@ -920,17 +919,22 @@ Paiement unique pour l'analyse.
 📲 Envoyer votre capture
 </h2>
 
+<p class="muted">
+Choisissez votre moyen de contact pour envoyer
+votre capture de matchs à analyser.
+</p>
+
 <a
-  class="btn primary"
+  class="btn green"
   href="${
     whatsappLink(
-      "Bonjour S-Drive 👋 Je souhaite envoyer ma capture de matchs."
+      "Bonjour S-Drive 👋\\n\\nJe souhaite faire analyser mon coupon/match.\\n\\nJe vous envoie ma capture pour analyse."
     ) || "#"
   }"
   target="_blank"
   rel="noopener noreferrer"
 >
-🟢 Ouvrir WhatsApp
+🟢 WhatsApp — Envoyer ma capture
 </a>
 
 <a
@@ -939,13 +943,14 @@ Paiement unique pour l'analyse.
   target="_blank"
   rel="noopener noreferrer"
 >
-🔵 Ouvrir Telegram
+🔵 Telegram — Envoyer ma capture
 </a>
 
 </div>
 
-
-<!-- COMMUNAUTÉ -->
+<!-- =====================
+     COMMUNAUTÉ S-DRIVE
+===================== -->
 
 <div class="card">
 
@@ -978,8 +983,70 @@ les informations et échanger avec les autres membres.
 
 </div>
 
+<!-- =====================
+     LIENS PARTENAIRES
+===================== -->
 
-<!-- PARTAGE -->
+<div class="card">
+
+<h2>
+🔗 Nos liens
+</h2>
+
+<p class="muted">
+Retrouvez nos plateformes et nos réseaux.
+</p>
+
+<a
+  class="btn primary"
+  href="https://one-vv3942.com/?p=gc9k&sub1=DM07"
+  target="_blank"
+  rel="noopener noreferrer"
+>
+🟢 1WIN
+</a>
+
+<a
+  class="btn primary"
+  href="https://combodef.com/L?tag=d_4081071m_60651c_&site=4081071&ad=60651"
+  target="_blank"
+  rel="noopener noreferrer"
+>
+🔵 Paripesa
+</a>
+
+<a
+  class="btn primary"
+  href="https://jdnlotto.com/register?promo=123"
+  target="_blank"
+  rel="noopener noreferrer"
+>
+🟡 Loto
+</a>
+
+<a
+  class="btn secondary"
+  href="https://www.tiktok.com/@batelemi92?_r=1&_t=ZS-99cD47Jhd00"
+  target="_blank"
+  rel="noopener noreferrer"
+>
+🎵 TikTok
+</a>
+
+<a
+  class="btn secondary"
+  href="https://www.facebook.com/share/1L96SqLnZT/"
+  target="_blank"
+  rel="noopener noreferrer"
+>
+🔵 Facebook
+</a>
+
+</div>
+
+<!-- =====================
+     PARTAGE
+===================== -->
 
 <div class="card">
 
@@ -1016,8 +1083,9 @@ Invitez vos amis à découvrir S-Drive.
 
 </div>
 
-
-<!-- CONDITIONS -->
+<!-- =====================
+     CONDITIONS
+===================== -->
 
 <div class="card">
 
@@ -1053,7 +1121,6 @@ vous pouvez réclamer un remboursement de
 
 </div>
 
-
 <div class="notice">
 
 <strong>Cote 10</strong>
@@ -1071,7 +1138,6 @@ le gain ou la perte du pari.
 
 </div>
 
-
 <p class="muted">
 
 Le paiement de l'analyse est de
@@ -1080,7 +1146,6 @@ Le paiement de l'analyse est de
 </p>
 
 </div>
-
 
 <button
   class="btn danger"
@@ -1091,13 +1156,11 @@ Se déconnecter
 
 </section>
 
-
 <footer>
 S-Drive — Analyse professionnelle des matchs
 </footer>
 
 </main>
-
 
 <script>
 
@@ -1106,7 +1169,6 @@ S-Drive — Analyse professionnelle des matchs
 ========================= */
 
 let selectedOdds = 2;
-
 
 /* =========================
    UTILITAIRES
@@ -1123,7 +1185,6 @@ function escapeHtml(value) {
 
 }
 
-
 function showStatus(id, message, type = "") {
 
   const element =
@@ -1137,7 +1198,6 @@ function showStatus(id, message, type = "") {
     "status " + type;
 
 }
-
 
 function setLoading(id, loading, text) {
 
@@ -1153,9 +1213,7 @@ function setLoading(id, loading, text) {
 
 }
 
-
 /* =========================
-   AFFICHER / MASQUER
    MOT DE PASSE
 ========================= */
 
@@ -1169,22 +1227,19 @@ function togglePassword(id, button) {
   if (input.type === "password") {
 
     input.type = "text";
-
     button.textContent = "🙈";
 
   } else {
 
     input.type = "password";
-
     button.textContent = "👁";
 
   }
 
 }
 
-
 /* =========================
-   AFFICHER DASHBOARD
+   DASHBOARD
 ========================= */
 
 function showDashboard(user) {
@@ -1197,14 +1252,12 @@ function showDashboard(user) {
     .getElementById("dashboard")
     .classList.remove("hidden");
 
-
   if (user) {
 
     document
       .getElementById("welcomeText")
       .textContent =
         "Bienvenue " + user.username;
-
 
     document
       .getElementById("userBox")
@@ -1223,7 +1276,6 @@ function showDashboard(user) {
   });
 
 }
-
 
 /* =========================
    INSCRIPTION
@@ -1247,12 +1299,10 @@ async function register() {
       .getElementById("registerPassword2")
       .value;
 
-
   showStatus(
     "registerStatus",
     ""
   );
-
 
   if (!username) {
 
@@ -1264,7 +1314,6 @@ async function register() {
 
   }
 
-
   if (username.length < 3) {
 
     return showStatus(
@@ -1274,7 +1323,6 @@ async function register() {
     );
 
   }
-
 
   if (!/^[a-zA-Z0-9_.-]+$/.test(username)) {
 
@@ -1286,7 +1334,6 @@ async function register() {
 
   }
 
-
   if (password.length < 6) {
 
     return showStatus(
@@ -1296,7 +1343,6 @@ async function register() {
     );
 
   }
-
 
   if (password !== password2) {
 
@@ -1308,13 +1354,11 @@ async function register() {
 
   }
 
-
   setLoading(
     "registerButton",
     true,
     "Créer mon compte"
   );
-
 
   try {
 
@@ -1340,12 +1384,10 @@ async function register() {
         }
       );
 
-
     const data =
       await response
         .json()
         .catch(() => ({}));
-
 
     if (!response.ok) {
 
@@ -1358,25 +1400,19 @@ async function register() {
 
     }
 
-
     showStatus(
       "registerStatus",
       "Compte créé avec succès !",
       "success"
     );
 
-
-    /*
-      Le serveur connecte automatiquement
-      le nouveau compte.
-    */
-
     setTimeout(() => {
 
-      showDashboard(data.user);
+      showDashboard(
+        data.user
+      );
 
     }, 500);
-
 
   } catch (error) {
 
@@ -1400,7 +1436,6 @@ async function register() {
 
 }
 
-
 /* =========================
    CONNEXION
 ========================= */
@@ -1418,12 +1453,10 @@ async function login() {
       .getElementById("loginPassword")
       .value;
 
-
   showStatus(
     "loginStatus",
     ""
   );
-
 
   if (!username || !password) {
 
@@ -1435,13 +1468,11 @@ async function login() {
 
   }
 
-
   setLoading(
     "loginButton",
     true,
     "Se connecter"
   );
-
 
   try {
 
@@ -1467,12 +1498,10 @@ async function login() {
         }
       );
 
-
     const data =
       await response
         .json()
         .catch(() => ({}));
-
 
     if (!response.ok) {
 
@@ -1485,25 +1514,19 @@ async function login() {
 
     }
 
-
     showStatus(
       "loginStatus",
       "Connexion réussie !",
       "success"
     );
 
-
-    /*
-      IMPORTANT :
-      on affiche directement l'interface.
-    */
-
     setTimeout(() => {
 
-      showDashboard(data.user);
+      showDashboard(
+        data.user
+      );
 
     }, 300);
-
 
   } catch (error) {
 
@@ -1527,7 +1550,6 @@ async function login() {
 
 }
 
-
 /* =========================
    SESSION
 ========================= */
@@ -1545,13 +1567,12 @@ async function checkSession() {
         }
       );
 
-
-    if (!response.ok) return;
-
+    if (!response.ok) {
+      return;
+    }
 
     const data =
       await response.json();
-
 
     if (
       data.success &&
@@ -1575,7 +1596,6 @@ async function checkSession() {
 
 }
 
-
 /* =========================
    CHOIX COTE
 ========================= */
@@ -1585,11 +1605,11 @@ function selectOdds(type) {
   if (
     type !== 2 &&
     type !== 10
-  ) return;
-
+  ) {
+    return;
+  }
 
   selectedOdds = type;
-
 
   document
     .getElementById("choice2")
@@ -1598,7 +1618,6 @@ function selectOdds(type) {
       "selected",
       type === 2
     );
-
 
   document
     .getElementById("choice10")
@@ -1609,7 +1628,6 @@ function selectOdds(type) {
     );
 
 }
-
 
 /* =========================
    CREER ANALYSE
@@ -1622,10 +1640,8 @@ async function sendMatchScreenshot() {
       "analysisStatus"
     );
 
-
   status.textContent =
     "Préparation de votre demande...";
-
 
   try {
 
@@ -1651,12 +1667,10 @@ async function sendMatchScreenshot() {
         }
       );
 
-
     const data =
       await response
         .json()
         .catch(() => ({}));
-
 
     if (!response.ok) {
 
@@ -1671,13 +1685,11 @@ async function sendMatchScreenshot() {
 
     }
 
-
     status.textContent =
       "Demande créée. Envoyez maintenant votre capture.";
 
     status.className =
       "status success";
-
 
     if (data.whatsapp_url) {
 
@@ -1690,6 +1702,8 @@ async function sendMatchScreenshot() {
 
   } catch (error) {
 
+    console.error(error);
+
     status.textContent =
       "Erreur de connexion au serveur.";
 
@@ -1699,7 +1713,6 @@ async function sendMatchScreenshot() {
   }
 
 }
-
 
 /* =========================
    PARTAGE
@@ -1712,7 +1725,6 @@ async function copyAppLink() {
     await navigator.clipboard.writeText(
       window.location.origin
     );
-
 
     showStatus(
       "shareStatus",
@@ -1731,7 +1743,6 @@ async function copyAppLink() {
   }
 
 }
-
 
 async function shareApp() {
 
@@ -1761,7 +1772,6 @@ async function shareApp() {
 
 }
 
-
 /* =========================
    DÉCONNEXION
 ========================= */
@@ -1784,7 +1794,6 @@ async function logout() {
 
 }
 
-
 /* =========================
    INITIALISATION
 ========================= */
@@ -1804,7 +1813,6 @@ document.addEventListener(
 
 </html>`);
 });
-
 
 /* =========================
    INSCRIPTION API
@@ -1828,7 +1836,6 @@ app.post(
           req.body.password || ""
         );
 
-
       if (!username) {
 
         return res.status(400).json({
@@ -1839,7 +1846,6 @@ app.post(
 
       }
 
-
       if (username.length < 3) {
 
         return res.status(400).json({
@@ -1849,7 +1855,6 @@ app.post(
         });
 
       }
-
 
       if (
         !/^[a-zA-Z0-9_.-]+$/.test(
@@ -1865,7 +1870,6 @@ app.post(
 
       }
 
-
       if (password.length < 6) {
 
         return res.status(400).json({
@@ -1876,12 +1880,10 @@ app.post(
 
       }
 
-
       const exists =
         db.prepare(
           "SELECT id FROM users WHERE username = ?"
         ).get(username);
-
 
       if (exists) {
 
@@ -1893,18 +1895,11 @@ app.post(
 
       }
 
-
       const hash =
         await bcrypt.hash(
           password,
           10
         );
-
-
-      /*
-        phone est laissé vide/null pour
-        les nouveaux comptes.
-      */
 
       const result =
         db.prepare(
@@ -1919,12 +1914,10 @@ app.post(
           "Membre S-Drive"
         );
 
-
       req.session.userId =
         Number(
           result.lastInsertRowid
         );
-
 
       res.status(201).json({
 
@@ -1972,7 +1965,6 @@ app.post(
   }
 );
 
-
 /* =========================
    CONNEXION API
 ========================= */
@@ -1995,7 +1987,6 @@ app.post(
           req.body.password || ""
         );
 
-
       if (
         !username ||
         !password
@@ -2012,7 +2003,6 @@ app.post(
 
       }
 
-
       const user =
         db.prepare(
           `SELECT
@@ -2027,7 +2017,6 @@ app.post(
            WHERE username = ?`
         ).get(username);
 
-
       if (!user) {
 
         return res.status(401).json({
@@ -2041,13 +2030,11 @@ app.post(
 
       }
 
-
       const valid =
         await bcrypt.compare(
           password,
           user.password_hash
         );
-
 
       if (!valid) {
 
@@ -2062,10 +2049,8 @@ app.post(
 
       }
 
-
       req.session.userId =
         user.id;
-
 
       res.json({
 
@@ -2113,7 +2098,6 @@ app.post(
   }
 );
 
-
 /* =========================
    UTILISATEUR CONNECTÉ
 ========================= */
@@ -2124,7 +2108,6 @@ app.get(
 
     const user =
       getCurrentUser(req);
-
 
     if (!user) {
 
@@ -2139,7 +2122,6 @@ app.get(
 
     }
 
-
     res.json({
 
       success: true,
@@ -2150,7 +2132,6 @@ app.get(
 
   }
 );
-
 
 /* =========================
    DÉCONNEXION API
@@ -2176,7 +2157,6 @@ app.post(
 
         }
 
-
         res.json({
 
           success: true
@@ -2188,7 +2168,6 @@ app.post(
 
   }
 );
-
 
 /* =========================
    CRÉER UNE DEMANDE
@@ -2206,7 +2185,6 @@ app.post(
           req.body.odds_type
         );
 
-
       if (
         odds !== 2 &&
         odds !== 10
@@ -2223,10 +2201,8 @@ app.post(
 
       }
 
-
       const user =
         getCurrentUser(req);
-
 
       if (!user) {
 
@@ -2241,7 +2217,6 @@ app.post(
 
       }
 
-
       const result =
         db.prepare(
           `INSERT INTO analyses
@@ -2251,7 +2226,6 @@ app.post(
           user.id,
           odds
         );
-
 
       const message = [
         "Bonjour S-Drive 👋",
@@ -2269,7 +2243,6 @@ app.post(
         "",
         "Je vais envoyer la capture de mes matchs."
       ].join("\n");
-
 
       res.status(201).json({
 
@@ -2309,7 +2282,6 @@ app.post(
   }
 );
 
-
 /* =========================
    SANTÉ DU SERVEUR
 ========================= */
@@ -2333,7 +2305,6 @@ app.get(
   }
 );
 
-
 /* =========================
    ROUTE INCONNUE
 ========================= */
@@ -2356,14 +2327,12 @@ app.use(
 
     }
 
-
     res.status(404).send(
       "Page introuvable."
     );
 
   }
 );
-
 
 /* =========================
    DÉMARRAGE
