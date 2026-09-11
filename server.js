@@ -32,11 +32,6 @@ const TELEGRAM_URL =
   process.env.TELEGRAM_URL ||
   "https://t.me/sdrive12";
 
-const TELEGRAM_MESSAGE =
-  "Bonjour S-Drive 👋\n\n" +
-  "Je souhaite faire analyser mon coupon/match.\n\n" +
-  "Je vous envoie ma capture pour analyse.";
-
 const WHATSAPP_GROUP_URL =
   process.env.WHATSAPP_GROUP_URL ||
   "https://chat.whatsapp.com/GikWdoQLZ8TFDHK2rTHH8T?s=cl&p=a&mlu=4&ilr=4";
@@ -118,12 +113,8 @@ app.use(
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-
-      secure:
-        process.env.NODE_ENV === "production",
-
-      maxAge:
-        7 * 24 * 60 * 60 * 1000
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 7 * 24 * 60 * 60 * 1000
     }
   })
 );
@@ -133,17 +124,12 @@ app.use(
 ========================================================= */
 
 const dbPath =
-  path.join(
-    __dirname,
-    "sdrive.db"
-  );
+  path.join(__dirname, "sdrive.db");
 
 const db =
   new Database(dbPath);
 
-db.pragma(
-  "foreign_keys = ON"
-);
+db.pragma("foreign_keys = ON");
 
 /* =========================================================
    TABLES
@@ -153,11 +139,11 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-    username TEXT UNIQUE,
+    username TEXT UNIQUE NOT NULL,
 
-    name TEXT NOT NULL,
+    name TEXT,
 
-    phone TEXT NOT NULL UNIQUE,
+    phone TEXT UNIQUE,
 
     password_hash TEXT NOT NULL,
 
@@ -209,131 +195,293 @@ db.exec(`
 `);
 
 /* =========================================================
-   MIGRATION
+   MIGRATION DE LA TABLE USERS
+   Permet de passer de l'ancien système téléphone
+   au nouveau système username + mot de passe.
 ========================================================= */
 
-function columnExists(table, column) {
+function getTableInfo(table) {
 
-  const columns =
-    db
-      .prepare(
-        `PRAGMA table_info(${table})`
-      )
-      .all();
+  return db
+    .prepare(`PRAGMA table_info(${table})`)
+    .all();
 
-  return columns.some(
-    (columnInfo) =>
-      columnInfo.name === column
-  );
 }
 
-if (!columnExists("users", "username")) {
+const userColumns =
+  getTableInfo("users");
+
+const hasUsername =
+  userColumns.some(
+    (column) =>
+      column.name === "username"
+  );
+
+const usernameIsNotNull =
+  userColumns.some(
+    (column) =>
+      column.name === "username" &&
+      column.notnull === 1
+  );
+
+const phoneColumn =
+  userColumns.find(
+    (column) =>
+      column.name === "phone"
+  );
+
+const phoneIsNotNull =
+  Boolean(
+    phoneColumn &&
+    phoneColumn.notnull === 1
+  );
+
+/*
+  Si une ancienne base existe avec :
+  username absent ou phone obligatoire,
+  on adapte la structure.
+
+  On conserve les utilisateurs existants.
+*/
+
+if (
+  !hasUsername ||
+  phoneIsNotNull
+) {
 
   try {
 
+    db.pragma(
+      "foreign_keys = OFF"
+    );
+
+    db.exec("BEGIN");
+
+    db.exec(`
+      CREATE TABLE users_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        username TEXT UNIQUE NOT NULL,
+
+        name TEXT,
+
+        phone TEXT UNIQUE,
+
+        password_hash TEXT NOT NULL,
+
+        badge TEXT NOT NULL
+          DEFAULT 'Membre S-Drive',
+
+        created_at TEXT NOT NULL
+          DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    const oldColumns =
+      userColumns.map(
+        (column) =>
+          column.name
+      );
+
+    const oldUsers =
+      db
+        .prepare(
+          "SELECT * FROM users ORDER BY id ASC"
+        )
+        .all();
+
+    const insertUser =
+      db.prepare(`
+        INSERT INTO users_new
+          (
+            id,
+            username,
+            name,
+            phone,
+            password_hash,
+            badge,
+            created_at
+          )
+        VALUES
+          (?, ?, ?, ?, ?, ?, ?)
+      `);
+
+    for (const oldUser of oldUsers) {
+
+      let username =
+        oldUser.username;
+
+      if (
+        !username ||
+        !String(username).trim()
+      ) {
+
+        let base =
+          String(
+            oldUser.name ||
+            "membre"
+          )
+            .trim()
+            .toLowerCase()
+            .replace(
+              /[^a-z0-9]/g,
+              ""
+            );
+
+        if (!base) {
+          base = "membre";
+        }
+
+        username = base;
+
+        let number = 1;
+
+        while (
+          db
+            .prepare(
+              `SELECT id
+               FROM users_new
+               WHERE username = ?`
+            )
+            .get(username)
+        ) {
+
+          username =
+            base + number;
+
+          number++;
+
+        }
+
+      } else {
+
+        username =
+          String(username)
+            .trim()
+            .toLowerCase();
+
+      }
+
+      insertUser.run(
+        oldUser.id,
+        username,
+        oldUser.name || null,
+        oldUser.phone || null,
+        oldUser.password_hash,
+        oldUser.badge ||
+          "Membre S-Drive",
+        oldUser.created_at ||
+          new Date().toISOString()
+      );
+
+    }
+
     db.exec(
-      `ALTER TABLE users ADD COLUMN username TEXT`
+      "DROP TABLE users"
+    );
+
+    db.exec(
+      "ALTER TABLE users_new RENAME TO users"
+    );
+
+    db.exec("COMMIT");
+
+    db.pragma(
+      "foreign_keys = ON"
+    );
+
+    console.log(
+      "Migration de la base utilisateurs terminée."
     );
 
   } catch (error) {
 
-    console.log(
-      "Migration username:",
-      error.message
+    try {
+      db.exec("ROLLBACK");
+    } catch (_) {}
+
+    db.pragma(
+      "foreign_keys = ON"
+    );
+
+    console.error(
+      "ERREUR MIGRATION USERS:",
+      error
     );
 
   }
-
-}
-
-/* =========================================================
-   MIGRATION DES ANCIENS UTILISATEURS
-========================================================= */
-
-try {
-
-  const oldUsers =
-    db
-      .prepare(`
-        SELECT
-          id,
-          name,
-          phone,
-          username
-        FROM users
-        WHERE username IS NULL
-           OR username = ''
-      `)
-      .all();
-
-  for (const user of oldUsers) {
-
-    let base =
-      String(
-        user.name ||
-        "membre"
-      )
-        .trim()
-        .toLowerCase()
-        .replace(
-          /[^a-z0-9]/g,
-          ""
-        );
-
-    if (!base) {
-      base = "membre";
-    }
-
-    let username = base;
-
-    let number = 1;
-
-    while (
-      db
-        .prepare(
-          `SELECT id
-           FROM users
-           WHERE username = ?
-           AND id != ?`
-        )
-        .get(
-          username,
-          user.id
-        )
-    ) {
-
-      username =
-        `${base}${number}`;
-
-      number++;
-
-    }
-
-    db
-      .prepare(
-        `UPDATE users
-         SET username = ?
-         WHERE id = ?`
-      )
-      .run(
-        username,
-        user.id
-      );
-
-  }
-
-} catch (error) {
-
-  console.log(
-    "Migration utilisateurs:",
-    error.message
-  );
 
 }
 
 /* =========================================================
    UTILITAIRES
 ========================================================= */
+
+function normalizeUsername(value) {
+
+  return String(
+    value || ""
+  )
+    .trim()
+    .toLowerCase();
+
+}
+
+function validateUsername(username) {
+
+  if (!username) {
+
+    return {
+      valid: false,
+      error:
+        "Veuillez entrer votre nom d’utilisateur."
+    };
+
+  }
+
+  if (
+    username.length < 3
+  ) {
+
+    return {
+      valid: false,
+      error:
+        "Le nom d’utilisateur doit contenir au moins 3 caractères."
+    };
+
+  }
+
+  if (
+    username.length > 30
+  ) {
+
+    return {
+      valid: false,
+      error:
+        "Le nom d’utilisateur ne doit pas dépasser 30 caractères."
+    };
+
+  }
+
+  if (
+    !/^[a-zA-Z0-9_.-]+$/.test(
+      username
+    )
+  ) {
+
+    return {
+      valid: false,
+      error:
+        "Le nom d’utilisateur peut contenir uniquement des lettres, chiffres, points, tirets et underscores."
+    };
+
+  }
+
+  return {
+    valid: true
+  };
+
+}
 
 function normalizePhone(value) {
 
@@ -377,6 +525,7 @@ function normalizePhone(value) {
   }
 
   return phone;
+
 }
 
 /* =========================================================
@@ -404,6 +553,7 @@ function getCurrentUser(req) {
     .get(
       req.session.userId
     );
+
 }
 
 /* =========================================================
@@ -421,17 +571,15 @@ function requireAuth(
     return res
       .status(401)
       .json({
-
         success: false,
-
         error:
           "Connexion requise."
-
       });
 
   }
 
   next();
+
 }
 
 /* =========================================================
@@ -443,6 +591,7 @@ function isAdmin(req) {
   return Boolean(
     req.session.admin
   );
+
 }
 
 function requireAdmin(
@@ -456,48 +605,31 @@ function requireAdmin(
     return res
       .status(403)
       .json({
-
         success: false,
-
         error:
           "Accès administrateur requis."
-
       });
 
   }
 
   next();
+
 }
 
 /* =========================================================
-   UTILITAIRES TEXTE
+   UTILITAIRE HTML
 ========================================================= */
 
 function escapeHtml(value) {
 
   return String(
-    value || ""
+    value ?? ""
   )
-    .replace(
-      /&/g,
-      "&amp;"
-    )
-    .replace(
-      /</g,
-      "&lt;"
-    )
-    .replace(
-      />/g,
-      "&gt;"
-    )
-    .replace(
-      /"/g,
-      "&quot;"
-    )
-    .replace(
-      /'/g,
-      "&#039;"
-    );
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
 
 }
 
@@ -505,9 +637,7 @@ function escapeHtml(value) {
    LIEN WHATSAPP
 ========================================================= */
 
-function whatsappLink(
-  message
-) {
+function whatsappLink(message) {
 
   const number =
     String(
@@ -574,21 +704,15 @@ app.get(
 <style>
 
 :root {
-
   --navy: #071A2D;
   --navy2: #0B223D;
-
   --card: #102B4C;
   --line: #23486B;
-
   --blue: #00BFFF;
   --green: #21C55D;
-
   --white: #FFFFFF;
   --muted: #AFC1D4;
-
   --red: #DC2626;
-
 }
 
 * {
@@ -600,18 +724,10 @@ html {
 }
 
 body {
-
   margin: 0;
-
   min-height: 100vh;
-
-  font-family:
-    Arial,
-    Helvetica,
-    sans-serif;
-
-  color:
-    var(--white);
+  font-family: Arial, Helvetica, sans-serif;
+  color: var(--white);
 
   background:
     radial-gradient(
@@ -619,23 +735,17 @@ body {
       #12385C 0%,
       var(--navy) 58%
     );
-
 }
 
 .container {
-
   width:
     min(
       calc(100% - 28px),
       520px
     );
 
-  margin:
-    auto;
-
-  padding:
-    18px 0 35px;
-
+  margin: auto;
+  padding: 18px 0 35px;
 }
 
 .center {
@@ -643,28 +753,16 @@ body {
 }
 
 .logo {
-
   width: 100px;
-
   height: 100px;
+  margin: 15px auto 8px;
 
-  margin:
-    15px auto 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 
-  display:
-    flex;
-
-  justify-content:
-    center;
-
-  align-items:
-    center;
-
-  border-radius:
-    50%;
-
-  font-size:
-    64px;
+  border-radius: 50%;
+  font-size: 64px;
 
   background:
     rgba(0,191,255,.10);
@@ -672,41 +770,24 @@ body {
   border:
     1px solid
     rgba(0,191,255,.25);
-
 }
 
 h1 {
-
-  margin:
-    8px 0 5px;
-
-  font-size:
-    32px;
-
+  margin: 8px 0 5px;
+  font-size: 32px;
 }
 
 h2 {
-
-  margin:
-    0 0 16px;
-
-  font-size:
-    21px;
-
+  margin: 0 0 16px;
+  font-size: 21px;
 }
 
 .muted {
-
-  color:
-    var(--muted);
-
-  line-height:
-    1.55;
-
+  color: var(--muted);
+  line-height: 1.55;
 }
 
 .card {
-
   background:
     rgba(16,43,76,.96);
 
@@ -714,34 +795,21 @@ h2 {
     1px solid
     var(--line);
 
-  border-radius:
-    20px;
-
-  padding:
-    20px;
-
-  margin:
-    15px 0;
+  border-radius: 20px;
+  padding: 20px;
+  margin: 15px 0;
 
   box-shadow:
     0 8px 25px
     rgba(0,0,0,.18);
-
 }
 
 input {
+  width: 100%;
+  padding: 15px;
+  margin: 7px 0;
 
-  width:
-    100%;
-
-  padding:
-    15px;
-
-  margin:
-    7px 0;
-
-  border-radius:
-    12px;
+  border-radius: 12px;
 
   border:
     1px solid
@@ -753,154 +821,88 @@ input {
   color:
     var(--white);
 
-  font-size:
-    16px;
-
-  outline:
-    none;
-
+  font-size: 16px;
+  outline: none;
 }
 
 input:focus {
-
   border-color:
     var(--blue);
-
 }
 
 .password-wrap {
-
-  position:
-    relative;
-
+  position: relative;
 }
 
 .password-wrap input {
-
-  padding-right:
-    50px;
-
+  padding-right: 50px;
 }
 
 .eye {
+  position: absolute;
+  right: 8px;
+  top: 7px;
 
-  position:
-    absolute;
+  height: 46px;
+  width: 42px;
 
-  right:
-    8px;
+  border: 0;
+  background: transparent;
+  color: white;
 
-  top:
-    7px;
-
-  height:
-    46px;
-
-  width:
-    42px;
-
-  border:
-    0;
-
-  background:
-    transparent;
-
-  color:
-    white;
-
-  font-size:
-    20px;
-
-  cursor:
-    pointer;
-
+  font-size: 20px;
+  cursor: pointer;
 }
 
 .btn {
+  width: 100%;
+  min-height: 52px;
+  padding: 14px;
 
-  width:
-    100%;
+  border-radius: 14px;
 
-  min-height:
-    52px;
+  font-weight: 800;
+  font-size: 15px;
 
-  padding:
-    14px;
+  border: 0;
+  margin: 8px 0;
 
-  border-radius:
-    14px;
+  cursor: pointer;
+  text-decoration: none;
 
-  font-weight:
-    800;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 
-  font-size:
-    15px;
-
-  border:
-    0;
-
-  margin:
-    8px 0;
-
-  cursor:
-    pointer;
-
-  text-decoration:
-    none;
-
-  display:
-    flex;
-
-  justify-content:
-    center;
-
-  align-items:
-    center;
-
-  text-align:
-    center;
-
+  text-align: center;
 }
 
 .btn:active {
-
-  transform:
-    scale(.98);
-
+  transform: scale(.98);
 }
 
 .btn:disabled {
-
-  opacity:
-    .65;
-
-  cursor:
-    wait;
-
+  opacity: .65;
+  cursor: wait;
 }
 
 .primary {
-
   background:
     var(--blue);
 
   color:
     #001B2D;
-
 }
 
 .green {
-
   background:
     var(--green);
 
   color:
     white;
-
 }
 
 .secondary {
-
   background:
     #193A5C;
 
@@ -910,21 +912,17 @@ input:focus {
   border:
     1px solid
     #315D82;
-
 }
 
 .danger {
-
   background:
     #7F1D1D;
 
   color:
     white;
-
 }
 
 .choice {
-
   border:
     1px solid
     #315D82;
@@ -932,48 +930,26 @@ input:focus {
   background:
     #0B223D;
 
-  padding:
-    17px;
+  padding: 17px;
+  border-radius: 15px;
+  margin: 9px 0;
 
-  border-radius:
-    15px;
-
-  margin:
-    9px 0;
-
-  cursor:
-    pointer;
-
-  transition:
-    .15s;
-
+  cursor: pointer;
+  transition: .15s;
 }
 
 .choice strong {
-
-  display:
-    block;
-
-  font-size:
-    18px;
-
-  margin-bottom:
-    6px;
-
+  display: block;
+  font-size: 18px;
+  margin-bottom: 6px;
 }
 
 .choice small {
-
-  color:
-    var(--muted);
-
-  line-height:
-    1.4;
-
+  color: var(--muted);
+  line-height: 1.4;
 }
 
 .choice.selected {
-
   border-color:
     var(--blue);
 
@@ -982,29 +958,17 @@ input:focus {
 
   transform:
     scale(1.01);
-
 }
 
 .price {
-
-  font-size:
-    28px;
-
-  font-weight:
-    900;
-
-  text-align:
-    center;
-
-  margin:
-    17px 0;
-
+  font-size: 28px;
+  font-weight: 900;
+  text-align: center;
+  margin: 17px 0;
 }
 
 .notice {
-
-  padding:
-    14px;
+  padding: 14px;
 
   border-left:
     3px solid
@@ -1013,52 +977,36 @@ input:focus {
   background:
     #0C2745;
 
-  border-radius:
-    8px;
+  border-radius: 8px;
+  line-height: 1.55;
 
-  line-height:
-    1.55;
-
-  margin:
-    10px 0;
-
+  margin: 10px 0;
 }
 
 .status {
-
-  margin-top:
-    12px;
+  margin-top: 12px;
 
   color:
     var(--muted);
 
-  text-align:
-    center;
+  text-align: center;
 
-  min-height:
-    24px;
+  min-height: 24px;
 
-  line-height:
-    1.4;
-
+  line-height: 1.4;
 }
 
 .status.success {
-
   color:
     #6EE7A0;
-
 }
 
 .status.error {
-
   color:
     #FF8A8A;
-
 }
 
 .user-box {
-
   background:
     rgba(7,26,45,.65);
 
@@ -1066,36 +1014,23 @@ input:focus {
     1px solid
     var(--line);
 
-  padding:
-    14px;
+  padding: 14px;
+  border-radius: 14px;
 
-  border-radius:
-    14px;
-
-  margin-bottom:
-    15px;
-
-  text-align:
-    center;
-
+  margin-bottom: 15px;
+  text-align: center;
 }
 
 .badge {
+  display: inline-flex;
 
-  display:
-    inline-flex;
+  align-items: center;
 
-  align-items:
-    center;
+  gap: 5px;
 
-  gap:
-    5px;
+  padding: 6px 10px;
 
-  padding:
-    6px 10px;
-
-  border-radius:
-    999px;
+  border-radius: 999px;
 
   background:
     #123B60;
@@ -1104,36 +1039,21 @@ input:focus {
     1px solid
     var(--blue);
 
-  font-size:
-    12px;
-
-  font-weight:
-    800;
-
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .bookmaker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 
-  display:
-    flex;
+  gap: 10px;
 
-  align-items:
-    center;
+  padding: 14px;
+  margin: 9px 0;
 
-  justify-content:
-    space-between;
-
-  gap:
-    10px;
-
-  padding:
-    14px;
-
-  margin:
-    9px 0;
-
-  border-radius:
-    14px;
+  border-radius: 14px;
 
   background:
     #0B223D;
@@ -1141,150 +1061,89 @@ input:focus {
   border:
     1px solid
     #315D82;
-
 }
 
 .bookmaker-info {
-
-  display:
-    flex;
-
-  align-items:
-    center;
-
-  gap:
-    10px;
-
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .bookmaker-icon {
+  width: 42px;
+  height: 42px;
 
-  width:
-    42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 
-  height:
-    42px;
-
-  display:
-    flex;
-
-  align-items:
-    center;
-
-  justify-content:
-    center;
-
-  border-radius:
-    12px;
+  border-radius: 12px;
 
   background:
     #193A5C;
 
-  font-size:
-    21px;
-
+  font-size: 21px;
 }
 
 .bookmaker-name {
-
-  font-weight:
-    900;
-
+  font-weight: 900;
 }
 
 .bookmaker-button {
+  width: auto;
+  min-width: 105px;
 
-  width:
-    auto;
-
-  min-width:
-    105px;
-
-  margin:
-    0;
-
-  padding:
-    11px 13px;
-
-  min-height:
-    44px;
-
+  margin: 0;
+  padding: 11px 13px;
+  min-height: 44px;
 }
 
 .share-box {
-
-  display:
-    grid;
+  display: grid;
 
   grid-template-columns:
     1fr 1fr;
 
-  gap:
-    8px;
-
+  gap: 8px;
 }
 
 .hidden {
-
-  display:
-    none !important;
-
+  display: none !important;
 }
 
 footer {
-
-  text-align:
-    center;
+  text-align: center;
 
   color:
     var(--muted);
 
-  font-size:
-    12px;
+  font-size: 12px;
 
-  margin-top:
-    25px;
-
+  margin-top: 25px;
 }
 
 @media(max-width:360px) {
 
   .container {
-
     width:
       calc(100% - 20px);
-
   }
 
   h1 {
-
-    font-size:
-      28px;
-
+    font-size: 28px;
   }
 
   .card {
-
-    padding:
-      16px;
-
+    padding: 16px;
   }
 
   .bookmaker {
-
-    flex-direction:
-      column;
-
-    align-items:
-      stretch;
-
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .bookmaker-button {
-
-    width:
-      100%;
-
+    width: 100%;
   }
 
 }
@@ -1296,6 +1155,10 @@ footer {
 <body>
 
 <main class="container">
+
+<!-- =====================================================
+     AUTHENTIFICATION
+===================================================== -->
 
 <section
   id="auth"
@@ -1318,6 +1181,8 @@ footer {
 
   </div>
 
+  <!-- CONNEXION -->
+
   <div class="card">
 
     <h2>
@@ -1325,11 +1190,11 @@ footer {
     </h2>
 
     <input
-      id="loginPhone"
-      type="tel"
-      inputmode="tel"
-      autocomplete="tel"
-      placeholder="Numéro de téléphone WhatsApp"
+      id="loginUsername"
+      type="text"
+      autocomplete="username"
+      autocapitalize="none"
+      placeholder="Nom d’utilisateur"
     >
 
     <div class="password-wrap">
@@ -1375,6 +1240,8 @@ footer {
 
   </div>
 
+  <!-- INSCRIPTION -->
+
   <div class="card">
 
     <h2>
@@ -1382,18 +1249,12 @@ footer {
     </h2>
 
     <input
-      id="registerName"
+      id="registerUsername"
       type="text"
-      autocomplete="name"
-      placeholder="Nom d'utilisateur"
-    >
-
-    <input
-      id="registerPhone"
-      type="tel"
-      inputmode="tel"
-      autocomplete="tel"
-      placeholder="Numéro de téléphone WhatsApp"
+      autocomplete="username"
+      autocapitalize="none"
+      maxlength="30"
+      placeholder="Nom d’utilisateur"
     >
 
     <div class="password-wrap">
@@ -1452,6 +1313,10 @@ footer {
 
 </section>
 
+<!-- =====================================================
+     DASHBOARD
+===================================================== -->
+
 <section
   id="dashboard"
   class="${loggedIn ? "" : "hidden"}"
@@ -1471,13 +1336,15 @@ footer {
       id="welcomeText"
       class="muted"
     >
-      Bienvenue ${user ? escapeHtml(user.name) : ""}
+      Bienvenue ${user ? escapeHtml(user.username) : ""}
     </p>
 
     ${
       user
         ? "<span class=\"badge\">🏅 " +
-          escapeHtml(user.badge) +
+          escapeHtml(
+            user.badge
+          ) +
           "</span>"
         : ""
     }
@@ -1494,10 +1361,14 @@ footer {
     <br>
 
     <span class="muted">
-      ${user ? escapeHtml(user.phone) : ""}
+
+      ${user ? escapeHtml(user.username) : ""}
+
     </span>
 
   </div>
+
+  <!-- ANALYSE -->
 
   <div class="card">
 
@@ -1578,6 +1449,8 @@ footer {
 
   </div>
 
+  <!-- WHATSAPP / TELEGRAM -->
+
   <div class="card">
 
     <h2>
@@ -1611,6 +1484,8 @@ footer {
     </a>
 
   </div>
+
+  <!-- BOOKMAKERS -->
 
   <div class="card">
 
@@ -1724,6 +1599,8 @@ footer {
 
   </div>
 
+  <!-- COMMUNAUTÉ -->
+
   <div class="card">
 
     <h2>
@@ -1756,6 +1633,8 @@ footer {
 
   </div>
 
+  <!-- RÉSEAUX -->
+
   <div class="card">
 
     <h2>
@@ -1781,6 +1660,8 @@ footer {
     </a>
 
   </div>
+
+  <!-- PARTAGE -->
 
   <div class="card">
 
@@ -1818,6 +1699,8 @@ footer {
     ></div>
 
   </div>
+
+  <!-- CONDITIONS -->
 
   <div class="card">
 
@@ -1904,6 +1787,10 @@ footer {
 
 </section>
 
+<!-- =====================================================
+     ADMINISTRATION
+===================================================== -->
+
 <section
   id="admin"
   class="hidden"
@@ -1934,6 +1821,7 @@ footer {
     <input
       id="adminPhone"
       type="tel"
+      inputmode="tel"
       placeholder="Téléphone administrateur"
     >
 
@@ -2033,6 +1921,7 @@ function showStatus(
 
   element.className =
     "status " + type;
+
 }
 
 /* =====================================================
@@ -2059,6 +1948,7 @@ function setLoading(
     loading
       ? "Patientez..."
       : text;
+
 }
 
 /* =====================================================
@@ -2160,7 +2050,7 @@ function showDashboard(
 
       welcome.textContent =
         "Bienvenue " +
-        user.name;
+        user.username;
 
     }
 
@@ -2173,12 +2063,10 @@ function showDashboard(
 
       userBox.innerHTML =
         "👤 <strong>" +
-        escapeHtml(user.name) +
+        escapeHtml(
+          user.username
+        ) +
         "</strong><br>" +
-
-        "<span class=\"muted\">" +
-        escapeHtml(user.phone) +
-        "</span><br>" +
 
         "🏅 <strong>" +
         escapeHtml(
@@ -2204,18 +2092,10 @@ function showDashboard(
 
 async function register() {
 
-  const name =
+  const username =
     document
       .getElementById(
-        "registerName"
-      )
-      .value
-      .trim();
-
-  const phone =
-    document
-      .getElementById(
-        "registerPhone"
+        "registerUsername"
       )
       .value
       .trim();
@@ -2239,21 +2119,16 @@ async function register() {
     ""
   );
 
-  if (!name) {
-
-    return showStatus(
-      "registerStatus",
-      "Veuillez entrer votre nom d’utilisateur.",
-      "error"
+  const usernameCheck =
+    validateUsername(
+      username
     );
 
-  }
-
-  if (!phone) {
+  if (!usernameCheck.valid) {
 
     return showStatus(
       "registerStatus",
-      "Veuillez entrer votre numéro WhatsApp.",
+      usernameCheck.error,
       "error"
     );
 
@@ -2307,8 +2182,7 @@ async function register() {
 
           body:
             JSON.stringify({
-              name,
-              phone,
+              username,
               password
             })
         }
@@ -2349,7 +2223,10 @@ async function register() {
 
   } catch (error) {
 
-    console.error(error);
+    console.error(
+      "REGISTER:",
+      error
+    );
 
     showStatus(
       "registerStatus",
@@ -2357,13 +2234,15 @@ async function register() {
       "error"
     );
 
-  }
+  } finally {
 
-  setLoading(
-    "registerButton",
-    false,
-    "Créer mon compte"
-  );
+    setLoading(
+      "registerButton",
+      false,
+      "Créer mon compte"
+    );
+
+  }
 
 }
 
@@ -2373,10 +2252,10 @@ async function register() {
 
 async function login() {
 
-  const phone =
+  const username =
     document
       .getElementById(
-        "loginPhone"
+        "loginUsername"
       )
       .value
       .trim();
@@ -2394,7 +2273,7 @@ async function login() {
   );
 
   if (
-    !phone ||
+    !username ||
     !password
   ) {
 
@@ -2430,7 +2309,7 @@ async function login() {
 
           body:
             JSON.stringify({
-              phone,
+              username,
               password
             })
         }
@@ -2448,7 +2327,7 @@ async function login() {
       showStatus(
         "loginStatus",
         data.error ||
-          "Numéro ou mot de passe incorrect.",
+          "Nom d’utilisateur ou mot de passe incorrect.",
         "error"
       );
 
@@ -2471,7 +2350,10 @@ async function login() {
 
   } catch (error) {
 
-    console.error(error);
+    console.error(
+      "LOGIN:",
+      error
+    );
 
     showStatus(
       "loginStatus",
@@ -2479,13 +2361,15 @@ async function login() {
       "error"
     );
 
-  }
+  } finally {
 
-  setLoading(
-    "loginButton",
-    false,
-    "Se connecter"
-  );
+    setLoading(
+      "loginButton",
+      false,
+      "Se connecter"
+    );
+
+  }
 
 }
 
@@ -2495,19 +2379,19 @@ async function login() {
 
 async function forgotPassword() {
 
-  const phone =
+  const username =
     document
       .getElementById(
-        "loginPhone"
+        "loginUsername"
       )
       .value
       .trim();
 
-  if (!phone) {
+  if (!username) {
 
     return showStatus(
       "loginStatus",
-      "Entrez d’abord votre numéro WhatsApp.",
+      "Entrez d’abord votre nom d’utilisateur.",
       "error"
     );
 
@@ -2531,7 +2415,7 @@ async function forgotPassword() {
 
           body:
             JSON.stringify({
-              phone
+              username
             })
         }
       );
@@ -2545,7 +2429,9 @@ async function forgotPassword() {
       data.message ||
         data.error ||
         "Demande envoyée.",
-      "success"
+      data.success === false
+        ? "error"
+        : "success"
     );
 
     if (
@@ -2560,6 +2446,11 @@ async function forgotPassword() {
     }
 
   } catch (error) {
+
+    console.error(
+      "FORGOT:",
+      error
+    );
 
     showStatus(
       "loginStatus",
@@ -2648,7 +2539,10 @@ async function sendMatchScreenshot() {
 
   } catch (error) {
 
-    console.error(error);
+    console.error(
+      "ANALYSIS:",
+      error
+    );
 
     status.textContent =
       "Erreur de connexion au serveur.";
@@ -2728,7 +2622,7 @@ async function shareApp() {
 
   } catch (error) {
 
-    // Annulation du partage
+    // Annulation normale du partage
 
   }
 
@@ -2836,6 +2730,11 @@ async function adminLogin() {
 
   } catch (error) {
 
+    console.error(
+      "ADMIN LOGIN:",
+      error
+    );
+
     showStatus(
       "adminLoginStatus",
       "Erreur serveur.",
@@ -2853,23 +2752,17 @@ async function adminLogin() {
 async function loadAdmin() {
 
   document
-    .getElementById(
-      "auth"
-    )
+    .getElementById("auth")
     .classList
     .add("hidden");
 
   document
-    .getElementById(
-      "dashboard"
-    )
+    .getElementById("dashboard")
     .classList
     .add("hidden");
 
   document
-    .getElementById(
-      "admin"
-    )
+    .getElementById("admin")
     .classList
     .remove("hidden");
 
@@ -2888,28 +2781,19 @@ async function loadAdmin() {
       await response.json();
 
     if (!response.ok) {
+
       return;
+
     }
 
     document
-      .getElementById(
-        "adminStats"
-      )
+      .getElementById("adminStats")
       .textContent =
       "Nombre total de clients : " +
       data.users.length;
 
-    /*
-      CORRECTION IMPORTANTE :
-      On n'utilise plus de backticks ici.
-      Cela évite de casser le template literal
-      principal de res.send().
-    */
-
     document
-      .getElementById(
-        "usersList"
-      )
+      .getElementById("usersList")
       .innerHTML =
       data.users
         .map(function(user) {
@@ -2918,12 +2802,16 @@ async function loadAdmin() {
             "<div class=\"notice\">" +
 
               "<strong>" +
-                escapeHtml(user.name) +
+                escapeHtml(
+                  user.username
+                ) +
               "</strong>" +
 
               "<br>" +
 
-              escapeHtml(user.phone) +
+              "<span class=\"muted\">" +
+                "Membre S-Drive" +
+              "</span>" +
 
               "<br><br>" +
 
@@ -2953,15 +2841,21 @@ async function loadAdmin() {
     const resetData =
       await resetResponse.json();
 
-    /*
-      CORRECTION IMPORTANTE :
-      Suppression du template literal imbriqué.
-    */
+    if (
+      !resetResponse.ok
+    ) {
+
+      document
+        .getElementById("resetList")
+        .innerHTML =
+        '<p class="muted">Impossible de charger les demandes.</p>';
+
+      return;
+
+    }
 
     document
-      .getElementById(
-        "resetList"
-      )
+      .getElementById("resetList")
       .innerHTML =
       resetData.requests
         .map(function(request) {
@@ -2971,17 +2865,11 @@ async function loadAdmin() {
 
               "<strong>" +
                 escapeHtml(
-                  request.name
+                  request.username
                 ) +
               "</strong>" +
 
-              "<br>" +
-
-              escapeHtml(
-                request.phone
-              ) +
-
-              "<br>" +
+              "<br><br>" +
 
               "<button " +
                 "class=\"btn green\" " +
@@ -2990,7 +2878,7 @@ async function loadAdmin() {
                 ")\"" +
               ">" +
 
-                "Envoyer une réinitialisation" +
+                "Générer un nouveau mot de passe" +
 
               "</button>" +
 
@@ -3023,27 +2911,51 @@ async function resolveReset(id) {
     const response =
       await fetch(
         "/api/admin/reset/" +
-          id,
+          encodeURIComponent(id),
         {
           method: "POST",
-
-          credentials:
-            "same-origin"
+          credentials: "same-origin"
         }
       );
 
     const data =
       await response.json();
 
-    alert(
+    if (!response.ok) {
+
+      alert(
+        data.error ||
+        "Impossible de traiter la demande."
+      );
+
+      return;
+
+    }
+
+    let message =
       data.message ||
-      data.error ||
-      "Opération terminée."
-    );
+      "Opération terminée.";
+
+    if (
+      data.temporary_password
+    ) {
+
+      message +=
+        "\n\nNouveau mot de passe temporaire : " +
+        data.temporary_password;
+
+    }
+
+    alert(message);
 
     loadAdmin();
 
   } catch (error) {
+
+    console.error(
+      "RESET:",
+      error
+    );
 
     alert(
       "Impossible de traiter la demande."
@@ -3082,23 +2994,17 @@ async function adminLogout() {
 function openAdmin() {
 
   document
-    .getElementById(
-      "auth"
-    )
+    .getElementById("auth")
     .classList
     .add("hidden");
 
   document
-    .getElementById(
-      "dashboard"
-    )
+    .getElementById("dashboard")
     .classList
     .add("hidden");
 
   document
-    .getElementById(
-      "admin"
-    )
+    .getElementById("admin")
     .classList
     .remove("hidden");
 
@@ -3183,14 +3089,9 @@ app.post(
 
     try {
 
-      const name =
-        String(
-          req.body.name || ""
-        ).trim();
-
-      const phone =
-        normalizePhone(
-          req.body.phone
+      const username =
+        normalizeUsername(
+          req.body.username
         );
 
       const password =
@@ -3198,32 +3099,21 @@ app.post(
           req.body.password || ""
         );
 
-      if (!name) {
+      const usernameCheck =
+        validateUsername(
+          username
+        );
+
+      if (
+        !usernameCheck.valid
+      ) {
 
         return res
           .status(400)
           .json({
-
             success: false,
-
             error:
-              "Veuillez entrer votre nom d’utilisateur."
-
-          });
-
-      }
-
-      if (!phone) {
-
-        return res
-          .status(400)
-          .json({
-
-            success: false,
-
-            error:
-              "Veuillez entrer votre numéro WhatsApp."
-
+              usernameCheck.error
           });
 
       }
@@ -3235,12 +3125,9 @@ app.post(
         return res
           .status(400)
           .json({
-
             success: false,
-
             error:
               "Le mot de passe doit contenir au moins 6 caractères."
-
           });
 
       }
@@ -3248,21 +3135,18 @@ app.post(
       const existing =
         db
           .prepare(
-            "SELECT id FROM users WHERE phone = ?"
+            "SELECT id FROM users WHERE username = ?"
           )
-          .get(phone);
+          .get(username);
 
       if (existing) {
 
         return res
           .status(409)
           .json({
-
             success: false,
-
             error:
-              "Ce numéro est déjà enregistré. Connectez-vous."
-
+              "Ce nom d’utilisateur est déjà utilisé. Choisissez-en un autre."
           });
 
       }
@@ -3277,13 +3161,20 @@ app.post(
         db
           .prepare(`
             INSERT INTO users
-              (name, phone, password_hash, badge)
+              (
+                username,
+                name,
+                phone,
+                password_hash,
+                badge
+              )
             VALUES
-              (?, ?, ?, ?)
+              (?, ?, ?, ?, ?)
           `)
           .run(
-            name,
-            phone,
+            username,
+            username,
+            null,
             hash,
             "Membre S-Drive"
           );
@@ -3309,9 +3200,10 @@ app.post(
                 result.lastInsertRowid
               ),
 
-            name,
+            username,
 
-            phone,
+            name:
+              username,
 
             badge:
               "Membre S-Drive"
@@ -3353,9 +3245,9 @@ app.post(
 
     try {
 
-      const phone =
-        normalizePhone(
-          req.body.phone
+      const username =
+        normalizeUsername(
+          req.body.username
         );
 
       const password =
@@ -3364,7 +3256,7 @@ app.post(
         );
 
       if (
-        !phone ||
+        !username ||
         !password
       ) {
 
@@ -3393,9 +3285,9 @@ app.post(
               badge,
               created_at
             FROM users
-            WHERE phone = ?
+            WHERE username = ?
           `)
-          .get(phone);
+          .get(username);
 
       if (!user) {
 
@@ -3406,7 +3298,7 @@ app.post(
             success: false,
 
             error:
-              "Numéro ou mot de passe incorrect."
+              "Nom d’utilisateur ou mot de passe incorrect."
 
           });
 
@@ -3427,7 +3319,7 @@ app.post(
             success: false,
 
             error:
-              "Numéro ou mot de passe incorrect."
+              "Nom d’utilisateur ou mot de passe incorrect."
 
           });
 
@@ -3452,10 +3344,11 @@ app.post(
             user.username,
 
           name:
-            user.name,
+            user.name ||
+            user.username,
 
           phone:
-            user.phone,
+            user.phone || null,
 
           badge:
             user.badge
@@ -3517,7 +3410,28 @@ app.get(
 
       success: true,
 
-      user
+      user: {
+
+        id:
+          user.id,
+
+        username:
+          user.username,
+
+        name:
+          user.name ||
+          user.username,
+
+        phone:
+          user.phone || null,
+
+        badge:
+          user.badge,
+
+        created_at:
+          user.created_at
+
+      }
 
     });
 
@@ -3551,9 +3465,7 @@ app.post(
         }
 
         res.json({
-
           success: true
-
         });
 
       }
@@ -3572,12 +3484,12 @@ app.post(
 
     try {
 
-      const phone =
-        normalizePhone(
-          req.body.phone
+      const username =
+        normalizeUsername(
+          req.body.username
         );
 
-      if (!phone) {
+      if (!username) {
 
         return res
           .status(400)
@@ -3586,7 +3498,7 @@ app.post(
             success: false,
 
             error:
-              "Entrez votre numéro WhatsApp."
+              "Entrez votre nom d’utilisateur."
 
           });
 
@@ -3597,12 +3509,18 @@ app.post(
           .prepare(`
             SELECT
               id,
+              username,
               name,
               phone
             FROM users
-            WHERE phone = ?
+            WHERE username = ?
           `)
-          .get(phone);
+          .get(username);
+
+      /*
+        Pour éviter de révéler si un compte existe,
+        on retourne le même message.
+      */
 
       if (!user) {
 
@@ -3611,7 +3529,7 @@ app.post(
           success: true,
 
           message:
-            "Si ce numéro existe, une demande de réinitialisation a été enregistrée."
+            "Si ce nom d’utilisateur existe, une demande de réinitialisation a été enregistrée."
 
         });
 
@@ -3631,11 +3549,8 @@ app.post(
       const message =
         "Bonjour S-Drive 👋\n\n" +
         "Je demande une réinitialisation de mon mot de passe.\n\n" +
-        "Nom : " +
-        user.name +
-        "\n" +
-        "Téléphone : " +
-        user.phone +
+        "Nom d'utilisateur : " +
+        user.username +
         "\n\n" +
         "Merci.";
 
@@ -3644,7 +3559,7 @@ app.post(
         success: true,
 
         message:
-          "Votre demande a été enregistrée. Contactez l’administrateur pour réinitialiser votre mot de passe.",
+          "Votre demande a été enregistrée. L’administrateur pourra générer un nouveau mot de passe.",
 
         whatsapp_url:
           whatsappLink(message)
@@ -3730,7 +3645,11 @@ app.post(
         db
           .prepare(`
             INSERT INTO analyses
-              (user_id, odds_type, status)
+              (
+                user_id,
+                odds_type,
+                status
+              )
             VALUES
               (?, ?, 'payment_pending')
           `)
@@ -3745,9 +3664,7 @@ app.post(
         "Je viens de créer une demande d’analyse.",
         "",
         "Client : " +
-          user.name,
-        "Téléphone : " +
-          user.phone,
+          user.username,
         "Type : Cote " +
           oddsType,
         "Référence : SD-" +
@@ -3860,9 +3777,7 @@ app.post(
       true;
 
     res.json({
-
       success: true
-
     });
 
   }
@@ -3880,9 +3795,7 @@ app.post(
       false;
 
     res.json({
-
       success: true
-
     });
 
   }
@@ -3904,7 +3817,6 @@ app.get(
             id,
             username,
             name,
-            phone,
             badge,
             created_at
           FROM users
@@ -3938,8 +3850,8 @@ app.get(
           SELECT
             pr.id,
             pr.user_id,
+            u.username,
             u.name,
-            u.phone,
             pr.created_at
           FROM password_resets pr
           JOIN users u
@@ -3977,8 +3889,8 @@ app.post(
             SELECT
               pr.id,
               pr.user_id,
-              u.name,
-              u.phone
+              u.username,
+              u.name
             FROM password_resets pr
             JOIN users u
               ON u.id = pr.user_id
@@ -4044,10 +3956,15 @@ app.post(
 
       const message =
         "Bonjour " +
-        request.name +
-        ", votre mot de passe temporaire S-Drive est : " +
+        request.username +
+        ",\n\n" +
+        "Votre nouveau mot de passe temporaire S-Drive est :\n\n" +
         temporaryPassword +
-        ". Connectez-vous puis modifiez-le si vous le souhaitez.";
+        "\n\n" +
+        "Nom d'utilisateur : " +
+        request.username +
+        "\n\n" +
+        "Connectez-vous à S-Drive avec ces informations.";
 
       const whatsapp =
         whatsappLink(
@@ -4059,12 +3976,9 @@ app.post(
         success: true,
 
         message:
-          "Réinitialisation créée. " +
-          (
-            whatsapp
-              ? "Le bouton WhatsApp peut être utilisé pour transmettre le nouveau mot de passe."
-              : "Configurez WHATSAPP_NUMBER dans Render."
-          ),
+          whatsapp
+            ? "Nouveau mot de passe généré. Vous pouvez l’envoyer par WhatsApp."
+            : "Nouveau mot de passe généré.",
 
         temporary_password:
           temporaryPassword,
