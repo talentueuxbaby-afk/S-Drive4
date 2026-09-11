@@ -3,13 +3,17 @@ const session = require("express-session");
 const bcrypt = require("bcryptjs");
 const Database = require("better-sqlite3");
 const path = require("path");
-const db = require("./db");
+
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 
 /* =========================================================
-   CONFIGURATION
+   CONFIGURATION S-DRIVE
 ========================================================= */
+
+const APP_URL =
+  process.env.APP_URL ||
+  "https://sdrive-1.onrender.com";
 
 const WAVE_URL =
   process.env.WAVE_URL ||
@@ -26,7 +30,7 @@ const WHATSAPP_MESSAGE =
 
 const TELEGRAM_URL =
   process.env.TELEGRAM_URL ||
-  "https://t.me/Sdrive12";
+  "https://t.me/sdrive12";
 
 const TELEGRAM_MESSAGE =
   "Bonjour S-Drive 👋\n\n" +
@@ -41,9 +45,10 @@ const TELEGRAM_GROUP_URL =
   process.env.TELEGRAM_GROUP_URL ||
   "https://t.me/sdrive123";
 
-/* =========================
-   BOOKMAKERS UNIQUEMENT
-========================= */
+
+/* =========================================================
+   BOOKMAKERS
+========================================================= */
 
 const WIN1_URL =
   process.env.WIN1_URL ||
@@ -57,9 +62,10 @@ const LOTO_URL =
   process.env.LOTO_URL ||
   "https://jdnlotto.com/register?promo=123";
 
-/* =========================
+
+/* =========================================================
    RÉSEAUX SOCIAUX
-========================= */
+========================================================= */
 
 const TIKTOK_URL =
   process.env.TIKTOK_URL ||
@@ -69,9 +75,23 @@ const FACEBOOK_URL =
   process.env.FACEBOOK_URL ||
   "https://www.facebook.com/share/1L96SqLnZT/";
 
-/* =========================
+
+/* =========================================================
+   ADMINISTRATION
+========================================================= */
+
+const ADMIN_PHONE =
+  process.env.ADMIN_PHONE ||
+  "";
+
+const ADMIN_PASSWORD =
+  process.env.ADMIN_PASSWORD ||
+  "";
+
+
+/* =========================================================
    SESSION
-========================= */
+========================================================= */
 
 const SESSION_SECRET =
   process.env.SESSION_SECRET ||
@@ -82,8 +102,17 @@ const SESSION_SECRET =
    EXPRESS
 ========================================================= */
 
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: false }));
+app.use(
+  express.json({
+    limit: "1mb"
+  })
+);
+
+app.use(
+  express.urlencoded({
+    extended: false
+  })
+);
 
 app.use(
   session({
@@ -94,52 +123,96 @@ app.use(
     cookie: {
       httpOnly: true,
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 7 * 24 * 60 * 60 * 1000
+
+      secure:
+        process.env.NODE_ENV === "production",
+
+      maxAge:
+        7 * 24 * 60 * 60 * 1000
     }
   })
 );
 
 
 /* =========================================================
-   DATABASE
+   DATABASE SQLITE
 ========================================================= */
 
-const db = new Database(
-  path.join(__dirname, "sdrive.db")
+const dbPath =
+  path.join(
+    __dirname,
+    "sdrive.db"
+  );
+
+const db =
+  new Database(dbPath);
+
+db.pragma(
+  "foreign_keys = ON"
 );
 
-db.pragma("foreign_keys = ON");
 
+/* =========================================================
+   TABLES
+========================================================= */
 
 db.exec(`
-CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  username TEXT UNIQUE,
-  name TEXT,
-  phone TEXT,
-  password_hash TEXT NOT NULL,
-  badge TEXT NOT NULL DEFAULT 'Membre S-Drive',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+  CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
 
-CREATE TABLE IF NOT EXISTS analyses (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL,
-  odds_type INTEGER NOT NULL CHECK(odds_type IN (2,10)),
-  status TEXT NOT NULL DEFAULT 'payment_pending',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-);
+    username TEXT UNIQUE,
 
-CREATE TABLE IF NOT EXISTS password_resets (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending',
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  resolved_at TEXT,
-  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-);
+    name TEXT NOT NULL,
+
+    phone TEXT NOT NULL UNIQUE,
+
+    password_hash TEXT NOT NULL,
+
+    badge TEXT NOT NULL
+      DEFAULT 'Membre S-Drive',
+
+    created_at TEXT NOT NULL
+      DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS analyses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    user_id INTEGER NOT NULL,
+
+    odds_type INTEGER NOT NULL
+      CHECK(odds_type IN (2, 10)),
+
+    status TEXT NOT NULL
+      DEFAULT 'payment_pending',
+
+    created_at TEXT NOT NULL
+      DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY(user_id)
+      REFERENCES users(id)
+      ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS password_resets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+    user_id INTEGER NOT NULL,
+
+    status TEXT NOT NULL
+      DEFAULT 'pending',
+
+    admin_password_hash TEXT,
+
+    created_at TEXT NOT NULL
+      DEFAULT CURRENT_TIMESTAMP,
+
+    resolved_at TEXT,
+
+    FOREIGN KEY(user_id)
+      REFERENCES users(id)
+      ON DELETE CASCADE
+  );
 `);
 
 
@@ -149,15 +222,22 @@ CREATE TABLE IF NOT EXISTS password_resets (
 
 function columnExists(table, column) {
 
-  const columns = db
-    .prepare(`PRAGMA table_info(${table})`)
-    .all();
+  const columns =
+    db
+      .prepare(
+        `PRAGMA table_info(${table})`
+      )
+      .all();
 
   return columns.some(
-    (columnInfo) => columnInfo.name === column
+    (columnInfo) =>
+      columnInfo.name === column
   );
 }
 
+
+/* Ajouter username aux anciennes
+   bases qui ne l'ont pas encore */
 
 if (!columnExists("users", "username")) {
 
@@ -180,26 +260,39 @@ if (!columnExists("users", "username")) {
 
 
 /* =========================================================
-   ANCIENS UTILISATEURS
+   MIGRATION DES ANCIENS UTILISATEURS
 ========================================================= */
 
 try {
 
   const oldUsers =
-    db.prepare(
-      `SELECT id, name, phone, username
-       FROM users
-       WHERE username IS NULL OR username = ''`
-    ).all();
+    db
+      .prepare(`
+        SELECT
+          id,
+          name,
+          phone,
+          username
+        FROM users
+        WHERE username IS NULL
+           OR username = ''
+      `)
+      .all();
 
 
   for (const user of oldUsers) {
 
     let base =
-      String(user.name || "membre")
+      String(
+        user.name ||
+        "membre"
+      )
         .trim()
         .toLowerCase()
-        .replace(/[^a-z0-9]/g, "");
+        .replace(
+          /[^a-z0-9]/g,
+          ""
+        );
 
 
     if (!base) {
@@ -208,15 +301,22 @@ try {
 
 
     let username = base;
+
     let number = 1;
 
 
     while (
       db
         .prepare(
-          "SELECT id FROM users WHERE username = ? AND id != ?"
+          `SELECT id
+           FROM users
+           WHERE username = ?
+           AND id != ?`
         )
-        .get(username, user.id)
+        .get(
+          username,
+          user.id
+        )
     ) {
 
       username =
@@ -227,12 +327,16 @@ try {
     }
 
 
-    db.prepare(
-      "UPDATE users SET username = ? WHERE id = ?"
-    ).run(
-      username,
-      user.id
-    );
+    db
+      .prepare(
+        `UPDATE users
+         SET username = ?
+         WHERE id = ?`
+      )
+      .run(
+        username,
+        user.id
+      );
 
   }
 
@@ -250,6 +354,60 @@ try {
    UTILITAIRES
 ========================================================= */
 
+function normalizePhone(value) {
+
+  let phone =
+    String(value || "")
+      .trim()
+      .replace(
+        /[^\d+]/g,
+        ""
+      );
+
+
+  if (!phone) {
+    return "";
+  }
+
+
+  if (
+    phone.startsWith("+225")
+  ) {
+
+    return phone.substring(1);
+
+  }
+
+
+  if (
+    phone.startsWith("225")
+  ) {
+
+    return phone;
+
+  }
+
+
+  if (
+    phone.startsWith("0")
+  ) {
+
+    return (
+      "225" +
+      phone.substring(1)
+    );
+
+  }
+
+
+  return phone;
+}
+
+
+/* =========================================================
+   UTILISATEUR CONNECTÉ
+========================================================= */
+
 function getCurrentUser(req) {
 
   if (!req.session.userId) {
@@ -258,35 +416,45 @@ function getCurrentUser(req) {
 
 
   return db
-    .prepare(
-      `SELECT
+    .prepare(`
+      SELECT
         id,
         username,
         name,
         phone,
         badge,
         created_at
-       FROM users
-       WHERE id = ?`
-    )
+      FROM users
+      WHERE id = ?
+    `)
     .get(
       req.session.userId
     );
 }
 
 
-function requireAuth(req, res, next) {
+/* =========================================================
+   AUTHENTIFICATION
+========================================================= */
+
+function requireAuth(
+  req,
+  res,
+  next
+) {
 
   if (!req.session.userId) {
 
-    return res.status(401).json({
+    return res
+      .status(401)
+      .json({
 
-      success: false,
+        success: false,
 
-      error:
-        "Connexion requise."
+        error:
+          "Connexion requise."
 
-    });
+      });
 
   }
 
@@ -294,19 +462,83 @@ function requireAuth(req, res, next) {
 }
 
 
+/* =========================================================
+   ADMIN
+========================================================= */
+
+function isAdmin(req) {
+
+  return Boolean(
+    req.session.admin
+  );
+}
+
+
+function requireAdmin(
+  req,
+  res,
+  next
+) {
+
+  if (!isAdmin(req)) {
+
+    return res
+      .status(403)
+      .json({
+
+        success: false,
+
+        error:
+          "Accès administrateur requis."
+
+      });
+
+  }
+
+  next();
+}
+
+
+/* =========================================================
+   UTILITAIRES TEXTE
+========================================================= */
+
 function escapeHtml(value) {
 
-  return String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+  return String(
+    value || ""
+  )
+    .replace(
+      /&/g,
+      "&amp;"
+    )
+    .replace(
+      /</g,
+      "&lt;"
+    )
+    .replace(
+      />/g,
+      "&gt;"
+    )
+    .replace(
+      /"/g,
+      "&quot;"
+    )
+    .replace(
+      /'/g,
+      "&#039;"
+    );
 
 }
 
 
-function whatsappLink(message) {
+/* =========================================================
+   LIEN WHATSAPP
+========================================================= */
+
+function whatsappLink(
+  message
+) {
 
   const number =
     String(
@@ -326,18 +558,9 @@ function whatsappLink(message) {
     "https://wa.me/" +
     number +
     "?text=" +
-    encodeURIComponent(message)
-  );
-
-}
-
-
-function telegramLink(message) {
-
-  return (
-    TELEGRAM_URL +
-    "?text=" +
-    encodeURIComponent(message)
+    encodeURIComponent(
+      message
+    )
   );
 
 }
@@ -347,27 +570,18 @@ function telegramLink(message) {
    PAGE PRINCIPALE
 ========================================================= */
 
-app.get("/", (req, res) => {
+app.get(
+  "/",
+  (req, res) => {
 
-  const user =
-    getCurrentUser(req);
+    const user =
+      getCurrentUser(req);
 
-  const loggedIn =
-    Boolean(user);
-
-
-  const initialUser =
-    user
-      ? JSON.stringify({
-          id: user.id,
-          username: user.username,
-          name: user.name,
-          badge: user.badge
-        }).replace(/</g, "\\u003c")
-      : "null";
+    const loggedIn =
+      Boolean(user);
 
 
-  res.send(`<!DOCTYPE html>
+    res.send(`<!DOCTYPE html>
 
 <html lang="fr">
 
@@ -388,7 +602,9 @@ app.get("/", (req, res) => {
   content="#071A2D"
 >
 
-<title>S-Drive</title>
+<title>
+  S-Drive — Analyse des matchs
+</title>
 
 
 <style>
@@ -401,6 +617,7 @@ app.get("/", (req, res) => {
 
   --navy: #071A2D;
   --navy2: #0B223D;
+
   --card: #102B4C;
   --line: #23486B;
 
@@ -423,6 +640,9 @@ app.get("/", (req, res) => {
   box-sizing: border-box;
 }
 
+html {
+  min-height: 100%;
+}
 
 body {
 
@@ -447,7 +667,6 @@ body {
 
 }
 
-
 .container {
 
   width:
@@ -460,10 +679,9 @@ body {
     auto;
 
   padding:
-    20px 0 35px;
+    18px 0 35px;
 
 }
-
 
 .center {
   text-align: center;
@@ -477,6 +695,7 @@ body {
 .logo {
 
   width: 100px;
+
   height: 100px;
 
   margin:
@@ -485,231 +704,24 @@ body {
   display:
     flex;
 
-  align-items:
+  justify-content:
     center;
 
-  justify-content:
+  align-items:
     center;
 
   border-radius:
     50%;
 
   font-size:
-    55px;
+    64px;
 
   background:
     rgba(0,191,255,.10);
 
   border:
     1px solid
-    rgba(0,191,255,.30);
-
-  box-shadow:
-    0 0 30px
-    rgba(0,191,255,.12);
-
-}
-
-
-.logo svg {
-
-  width:
-    70px;
-
-  height:
-    70px;
-
-}
-
-
-/* =====================================================
-   CHARGEMENT
-===================================================== */
-
-.loading-screen {
-
-  position:
-    fixed;
-
-  inset:
-    0;
-
-  z-index:
-    9999;
-
-  display:
-    flex;
-
-  flex-direction:
-    column;
-
-  align-items:
-    center;
-
-  justify-content:
-    center;
-
-  background:
-    #071A2D;
-
-  transition:
-    opacity .35s ease;
-
-}
-
-
-.loading-screen.hidden-loading {
-
-  opacity:
-    0;
-
-  pointer-events:
-    none;
-
-}
-
-
-.loading-logo {
-
-  width:
-    90px;
-
-  height:
-    90px;
-
-  display:
-    flex;
-
-  align-items:
-    center;
-
-  justify-content:
-    center;
-
-  border-radius:
-    50%;
-
-  background:
-    rgba(0,191,255,.10);
-
-  border:
-    1px solid
-    rgba(0,191,255,.30);
-
-  animation:
-    pulse 1.2s infinite;
-
-}
-
-
-.loading-logo svg {
-
-  width:
-    65px;
-
-  height:
-    65px;
-
-}
-
-
-.loading-title {
-
-  margin-top:
-    20px;
-
-  font-size:
-    24px;
-
-  font-weight:
-    900;
-
-}
-
-
-.loading-text {
-
-  margin-top:
-    8px;
-
-  color:
-    var(--muted);
-
-  font-size:
-    14px;
-
-}
-
-
-.loader {
-
-  width:
-    180px;
-
-  height:
-    4px;
-
-  margin-top:
-    20px;
-
-  overflow:
-    hidden;
-
-  border-radius:
-    99px;
-
-  background:
-    #193A5C;
-
-}
-
-
-.loader-bar {
-
-  width:
-    40%;
-
-  height:
-    100%;
-
-  border-radius:
-    99px;
-
-  background:
-    var(--blue);
-
-  animation:
-    loading 1.2s infinite ease-in-out;
-
-}
-
-
-@keyframes loading {
-
-  0% {
-    transform:
-      translateX(-120%);
-  }
-
-  100% {
-    transform:
-      translateX(400%);
-  }
-
-}
-
-
-@keyframes pulse {
-
-  0%, 100% {
-    transform:
-      scale(1);
-  }
-
-  50% {
-    transform:
-      scale(1.06);
-  }
+    rgba(0,191,255,.25);
 
 }
 
@@ -724,10 +736,9 @@ h1 {
     8px 0 5px;
 
   font-size:
-    34px;
+    32px;
 
 }
-
 
 h2 {
 
@@ -738,7 +749,6 @@ h2 {
     21px;
 
 }
-
 
 .muted {
 
@@ -790,13 +800,13 @@ input {
     100%;
 
   padding:
-    16px;
+    15px;
 
   margin:
     7px 0;
 
   border-radius:
-    13px;
+    12px;
 
   border:
     1px solid
@@ -816,7 +826,6 @@ input {
 
 }
 
-
 input:focus {
 
   border-color:
@@ -832,11 +841,10 @@ input:focus {
 
 }
 
-
 .password-wrap input {
 
   padding-right:
-    55px;
+    50px;
 
 }
 
@@ -847,16 +855,16 @@ input:focus {
     absolute;
 
   right:
-    7px;
+    8px;
 
   top:
     7px;
 
-  width:
-    45px;
-
   height:
     46px;
+
+  width:
+    42px;
 
   border:
     0;
@@ -926,6 +934,12 @@ input:focus {
 
 }
 
+.btn:active {
+
+  transform:
+    scale(.98);
+
+}
 
 .btn:disabled {
 
@@ -978,7 +992,7 @@ input:focus {
 .danger {
 
   background:
-    var(--red);
+    #7F1D1D;
 
   color:
     white;
@@ -1016,7 +1030,6 @@ input:focus {
 
 }
 
-
 .choice strong {
 
   display:
@@ -1030,7 +1043,6 @@ input:focus {
 
 }
 
-
 .choice small {
 
   color:
@@ -1040,7 +1052,6 @@ input:focus {
     1.4;
 
 }
-
 
 .choice.selected {
 
@@ -1128,14 +1139,12 @@ input:focus {
 
 }
 
-
 .status.success {
 
   color:
     #6EE7A0;
 
 }
-
 
 .status.error {
 
@@ -1159,7 +1168,7 @@ input:focus {
     var(--line);
 
   padding:
-    15px;
+    14px;
 
   border-radius:
     14px;
@@ -1242,7 +1251,6 @@ input:focus {
 
 }
 
-
 .bookmaker-info {
 
   display:
@@ -1255,7 +1263,6 @@ input:focus {
     10px;
 
 }
-
 
 .bookmaker-icon {
 
@@ -1285,14 +1292,12 @@ input:focus {
 
 }
 
-
 .bookmaker-name {
 
   font-weight:
     900;
 
 }
-
 
 .bookmaker-button {
 
@@ -1377,7 +1382,7 @@ footer {
   h1 {
 
     font-size:
-      29px;
+      28px;
 
   }
 
@@ -1415,67 +1420,6 @@ footer {
 <body>
 
 
-<!-- =====================================================
-     ÉCRAN DE CHARGEMENT
-===================================================== -->
-
-<div
-  id="loadingScreen"
-  class="loading-screen"
->
-
-  <div class="loading-logo">
-
-    <svg
-      viewBox="0 0 100 100"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-
-      <path
-        d="M50 82 C49 65 48 47 43 28"
-        stroke="#21C55D"
-        stroke-width="8"
-        fill="none"
-        stroke-linecap="round"
-      />
-
-      <path
-        d="M45 47 C25 45 17 33 16 19 C31 19 43 27 45 47Z"
-        fill="#21C55D"
-      />
-
-      <path
-        d="M49 58 C67 55 80 45 83 30 C68 30 55 38 49 58Z"
-        fill="#21C55D"
-      />
-
-      <path
-        d="M47 31 C58 23 68 13 67 4 C54 7 47 17 47 31Z"
-        fill="#21C55D"
-      />
-
-    </svg>
-
-  </div>
-
-
-  <div class="loading-title">
-    S-Drive
-  </div>
-
-
-  <div class="loading-text">
-    Préparation de votre espace...
-  </div>
-
-
-  <div class="loader">
-    <div class="loader-bar"></div>
-  </div>
-
-</div>
-
-
 <main class="container">
 
 
@@ -1488,191 +1432,169 @@ footer {
   class="${loggedIn ? "hidden" : ""}"
 >
 
+  <div class="center">
 
-<div class="center">
+    <div class="logo">
+      ⚽
+    </div>
 
-  <div class="logo">
+    <h1>
+      S-Drive
+    </h1>
 
-    <svg
-      viewBox="0 0 100 100"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-
-      <path
-        d="M50 82 C49 65 48 47 43 28"
-        stroke="#21C55D"
-        stroke-width="8"
-        fill="none"
-        stroke-linecap="round"
-      />
-
-      <path
-        d="M45 47 C25 45 17 33 16 19 C31 19 43 27 45 47Z"
-        fill="#21C55D"
-      />
-
-      <path
-        d="M49 58 C67 55 80 45 83 30 C68 30 55 38 49 58Z"
-        fill="#21C55D"
-      />
-
-      <path
-        d="M47 31 C58 23 68 13 67 4 C54 7 47 17 47 31Z"
-        fill="#21C55D"
-      />
-
-    </svg>
+    <p class="muted">
+      Analyse professionnelle de vos matchs
+    </p>
 
   </div>
 
 
-  <h1>S-Drive</h1>
+  <!-- CONNEXION -->
 
+  <div class="card">
 
-  <p class="muted">
-    Application d'analyse des matchs et coupons du jour.
-  </p>
-
-</div>
-
-
-<!-- CONNEXION -->
-
-<div class="card">
-
-  <h2>
-    Connexion
-  </h2>
-
-
-  <input
-    id="loginUsername"
-    type="text"
-    autocomplete="username"
-    placeholder="Nom d'utilisateur"
-  >
-
-
-  <div class="password-wrap">
+    <h2>
+      Connexion
+    </h2>
 
     <input
-      id="loginPassword"
-      type="password"
-      autocomplete="current-password"
-      placeholder="Mot de passe"
+      id="loginPhone"
+      type="tel"
+      inputmode="tel"
+      autocomplete="tel"
+      placeholder="Numéro de téléphone WhatsApp"
     >
 
+
+    <div class="password-wrap">
+
+      <input
+        id="loginPassword"
+        type="password"
+        autocomplete="current-password"
+        placeholder="Mot de passe"
+      >
+
+      <button
+        class="eye"
+        type="button"
+        onclick="togglePassword('loginPassword', this)"
+      >
+        👁
+      </button>
+
+    </div>
+
+
     <button
-      class="eye"
+      id="loginButton"
+      class="btn primary"
       type="button"
-      onclick="togglePassword('loginPassword', this)"
+      onclick="login()"
     >
-      👁
+      Se connecter
     </button>
+
+
+    <button
+      class="btn secondary"
+      type="button"
+      onclick="forgotPassword()"
+    >
+      🔑 Mot de passe oublié ?
+    </button>
+
+
+    <div
+      id="loginStatus"
+      class="status"
+    ></div>
 
   </div>
 
 
-  <button
-    id="loginButton"
-    class="btn primary"
-    type="button"
-    onclick="login()"
-  >
-    Se connecter
-  </button>
+  <!-- INSCRIPTION -->
 
+  <div class="card">
 
-  <button
-    class="btn secondary"
-    type="button"
-    onclick="forgotPassword()"
-  >
-    🔑 Mot de passe oublié ?
-  </button>
+    <h2>
+      Créer un compte
+    </h2>
 
-
-  <div
-    id="loginStatus"
-    class="status"
-  ></div>
-
-</div>
-
-
-<!-- INSCRIPTION -->
-
-<div class="card">
-
-  <h2>
-    Créer un compte
-  </h2>
-
-
-  <input
-    id="registerUsername"
-    type="text"
-    autocomplete="username"
-    placeholder="Nom d'utilisateur"
-  >
-
-
-  <div class="password-wrap">
 
     <input
-      id="registerPassword"
-      type="password"
-      autocomplete="new-password"
-      placeholder="Mot de passe — 6 caractères minimum"
+      id="registerName"
+      type="text"
+      autocomplete="name"
+      placeholder="Nom d'utilisateur"
     >
 
-    <button
-      class="eye"
-      type="button"
-      onclick="togglePassword('registerPassword', this)"
-    >
-      👁
-    </button>
-
-  </div>
-
-
-  <div class="password-wrap">
 
     <input
-      id="registerPassword2"
-      type="password"
-      autocomplete="new-password"
-      placeholder="Confirmer le mot de passe"
+      id="registerPhone"
+      type="tel"
+      inputmode="tel"
+      autocomplete="tel"
+      placeholder="Numéro de téléphone WhatsApp"
     >
+
+
+    <div class="password-wrap">
+
+      <input
+        id="registerPassword"
+        type="password"
+        autocomplete="new-password"
+        placeholder="Mot de passe — 6 caractères minimum"
+      >
+
+      <button
+        class="eye"
+        type="button"
+        onclick="togglePassword('registerPassword', this)"
+      >
+        👁
+      </button>
+
+    </div>
+
+
+    <div class="password-wrap">
+
+      <input
+        id="registerPassword2"
+        type="password"
+        autocomplete="new-password"
+        placeholder="Confirmer le mot de passe"
+      >
+
+      <button
+        class="eye"
+        type="button"
+        onclick="togglePassword('registerPassword2', this)"
+      >
+        👁
+      </button>
+
+    </div>
+
 
     <button
-      class="eye"
+      id="registerButton"
+      class="btn primary"
       type="button"
-      onclick="togglePassword('registerPassword2', this)"
+      onclick="register()"
     >
-      👁
+      Créer mon compte
     </button>
 
+
+    <div
+      id="registerStatus"
+      class="status"
+    ></div>
+
   </div>
-
-
-  <button
-    id="registerButton"
-    class="btn primary"
-    type="button"
-    onclick="register()"
-  >
-    Créer mon compte
-  </button>
-
-
-  <div
-    id="registerStatus"
-    class="status"
-  ></div>
-
-</div>
 
 </section>
 
@@ -1687,566 +1609,618 @@ footer {
 >
 
 
-<div class="center">
+  <div class="center">
 
-  <div class="logo">
+    <div class="logo">
+      ⚽
+    </div>
 
-    <svg
-      viewBox="0 0 100 100"
-      xmlns="http://www.w3.org/2000/svg"
+    <h1>
+      S-Drive
+    </h1>
+
+    <p class="muted">
+      Bienvenue ${user ? escapeHtml(user.name) : ""}
+    </p>
+
+    ${
+      user
+        ? `
+        <span class="badge">
+          🏅 ${escapeHtml(user.badge)}
+        </span>
+        `
+        : ""
+    }
+
+  </div>
+
+
+  <div class="user-box">
+
+    👤 Compte connecté
+
+    <br>
+
+    <span class="muted">
+      ${user ? escapeHtml(user.phone) : ""}
+    </span>
+
+  </div>
+
+
+  <!-- ANALYSE -->
+
+  <div class="card">
+
+    <h2>
+      Analyse des matchs
+    </h2>
+
+
+    <div class="notice">
+
+      Choisissez le type d'analyse
+      que vous souhaitez.
+
+    </div>
+
+
+    <div
+      id="choice2"
+      class="choice selected"
+      onclick="selectOdds(2)"
     >
 
-      <path
-        d="M50 82 C49 65 48 47 43 28"
-        stroke="#21C55D"
-        stroke-width="8"
-        fill="none"
-        stroke-linecap="round"
-      />
+      <strong>
+        Cote 2
+      </strong>
 
-      <path
-        d="M45 47 C25 45 17 33 16 19 C31 19 43 27 45 47Z"
-        fill="#21C55D"
-      />
+      <small>
+        Analyse rapide —
+        environ 2 à 3 minutes
+      </small>
 
-      <path
-        d="M49 58 C67 55 80 45 83 30 C68 30 55 38 49 58Z"
-        fill="#21C55D"
-      />
-
-      <path
-        d="M47 31 C58 23 68 13 67 4 C54 7 47 17 47 31Z"
-        fill="#21C55D"
-      />
-
-    </svg>
-
-  </div>
+    </div>
 
 
-  <h1>S-Drive</h1>
+    <div
+      id="choice10"
+      class="choice"
+      onclick="selectOdds(10)"
+    >
+
+      <strong>
+        Cote 10
+      </strong>
+
+      <small>
+        Analyse complète —
+        environ 7 à 8 minutes
+      </small>
+
+    </div>
 
 
-  <p
-    id="welcomeText"
-    class="muted"
-  >
-    Bienvenue ${user ? escapeHtml(user.username) : ""}
-  </p>
+    <div class="price">
+      1 000 F
+    </div>
 
 
-  <span class="badge">
-    🏅 Membre S-Drive
-  </span>
-
-</div>
+    <p class="muted center">
+      Paiement unique pour l'analyse.
+    </p>
 
 
-<!-- UTILISATEUR -->
-
-<div
-  id="userBox"
-  class="user-box"
->
-
-  👤
-
-  <strong>
-    ${user ? escapeHtml(user.username) : ""}
-  </strong>
-
-  <br>
-
-  <span class="muted">
-    Compte connecté
-  </span>
-
-</div>
+    <a
+      class="btn green"
+      href="${WAVE_URL}"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      💳 Payer 1 000 F avec Wave
+    </a>
 
 
-<!-- =====================================================
-     ANALYSE
-===================================================== -->
-
-<div class="card">
-
-  <h2>
-    ⚽ Analyse des matchs
-  </h2>
+    <button
+      class="btn primary"
+      type="button"
+      onclick="sendMatchScreenshot()"
+    >
+      📸 Envoyer la capture des matchs
+    </button>
 
 
-  <div class="notice">
-
-    Choisissez le type d'analyse
-    que vous souhaitez.
+    <div
+      id="analysisStatus"
+      class="status"
+    ></div>
 
   </div>
 
 
-  <div
-    id="choice2"
-    class="choice selected"
-    onclick="selectOdds(2)"
-  >
+  <!-- ENVOI -->
 
-    <strong>
-      Cote 2
-    </strong>
+  <div class="card">
 
-    <small>
-      Analyse rapide — environ 2 à 3 minutes
-    </small>
+    <h2>
+      📲 Envoyer votre capture
+    </h2>
+
+
+    <p class="muted">
+      Après votre paiement,
+      envoyez la capture de vos matchs
+      à S-Drive pour l'analyse.
+    </p>
+
+
+    <a
+      class="btn primary"
+      href="${whatsappLink(
+        WHATSAPP_MESSAGE
+      ) || "#"}"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      🟢 Ouvrir WhatsApp
+    </a>
+
+
+    <a
+      class="btn secondary"
+      href="${TELEGRAM_URL}"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      🔵 Ouvrir Telegram
+    </a>
 
   </div>
 
 
-  <div
-    id="choice10"
-    class="choice"
-    onclick="selectOdds(10)"
-  >
+  <!-- BOOKMAKERS -->
 
-    <strong>
-      Cote 10
-    </strong>
+  <div class="card">
 
-    <small>
-      Analyse complète — environ 7 à 8 minutes
-    </small>
+    <h2>
+      🎯 Nos bookmakers
+    </h2>
+
+
+    <p class="muted">
+      Retrouvez les plateformes partenaires
+      de S-Drive.
+    </p>
+
+
+    <div class="bookmaker">
+
+      <div class="bookmaker-info">
+
+        <div class="bookmaker-icon">
+          🎰
+        </div>
+
+        <div>
+
+          <div class="bookmaker-name">
+            1win
+          </div>
+
+          <small class="muted">
+            Pari sportif
+          </small>
+
+        </div>
+
+      </div>
+
+
+      <a
+        class="btn green bookmaker-button"
+        href="${WIN1_URL}"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Ouvrir
+      </a>
+
+    </div>
+
+
+    <div class="bookmaker">
+
+      <div class="bookmaker-info">
+
+        <div class="bookmaker-icon">
+          🎯
+        </div>
+
+        <div>
+
+          <div class="bookmaker-name">
+            Paripesa
+          </div>
+
+          <small class="muted">
+            Pari sportif
+          </small>
+
+        </div>
+
+      </div>
+
+
+      <a
+        class="btn green bookmaker-button"
+        href="${PARIPESA_URL}"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Ouvrir
+      </a>
+
+    </div>
+
+
+    <div class="bookmaker">
+
+      <div class="bookmaker-info">
+
+        <div class="bookmaker-icon">
+          🎟️
+        </div>
+
+        <div>
+
+          <div class="bookmaker-name">
+            Loto
+          </div>
+
+          <small class="muted">
+            Jeux et pronostics
+          </small>
+
+        </div>
+
+      </div>
+
+
+      <a
+        class="btn green bookmaker-button"
+        href="${LOTO_URL}"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Ouvrir
+      </a>
+
+    </div>
 
   </div>
 
 
-  <div class="price">
-    1 000 F
+  <!-- COMMUNAUTÉ -->
+
+  <div class="card">
+
+    <h2>
+      👥 Communauté S-Drive
+    </h2>
+
+
+    <p class="muted">
+      Rejoignez nos communautés
+      pour recevoir les informations
+      et échanger avec les autres membres.
+    </p>
+
+
+    <a
+      class="btn primary"
+      href="${WHATSAPP_GROUP_URL}"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      🟢 Groupe WhatsApp
+    </a>
+
+
+    <a
+      class="btn secondary"
+      href="${TELEGRAM_GROUP_URL}"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      🔵 Groupe Telegram
+    </a>
+
   </div>
 
 
-  <p class="muted center">
-    Paiement unique pour l'analyse.
-  </p>
+  <!-- RÉSEAUX SOCIAUX -->
+
+  <div class="card">
+
+    <h2>
+      📱 Suivez S-Drive
+    </h2>
 
 
-  <a
-    class="btn green"
-    href="${WAVE_URL}"
-    target="_blank"
-    rel="noopener noreferrer"
-  >
-    💳 Payer 1 000 F avec Wave
-  </a>
+    <a
+      class="btn secondary"
+      href="${TIKTOK_URL}"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      🎵 TikTok
+    </a>
+
+
+    <a
+      class="btn secondary"
+      href="${FACEBOOK_URL}"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      📘 Facebook
+    </a>
+
+  </div>
+
+
+  <!-- PARTAGE -->
+
+  <div class="card">
+
+    <h2>
+      Partager S-Drive
+    </h2>
+
+
+    <p class="muted">
+      Invitez vos amis à découvrir S-Drive.
+    </p>
+
+
+    <div class="share-box">
+
+      <button
+        class="btn secondary"
+        type="button"
+        onclick="copyAppLink()"
+      >
+        📋 Copier le lien
+      </button>
+
+
+      <button
+        class="btn secondary"
+        type="button"
+        onclick="shareApp()"
+      >
+        📤 Partager
+      </button>
+
+    </div>
+
+
+    <div
+      id="shareStatus"
+      class="status"
+    ></div>
+
+  </div>
+
+
+  <!-- CONDITIONS -->
+
+  <div class="card">
+
+    <h2>
+      Conditions d'utilisation
+    </h2>
+
+
+    <div class="notice">
+
+      <strong>
+        Cote 2
+      </strong>
+
+      <br><br>
+
+      Après paiement et réception
+      de votre capture, S-Drive analyse
+      vos matchs de cote 2.
+
+      <br><br>
+
+      Délai indicatif :
+      <strong>
+        2 à 3 minutes
+      </strong>.
+
+      <br><br>
+
+      Si le coupon de cote 2 analysé
+      et envoyé par S-Drive est validé
+      après votre pari, aucun montant
+      supplémentaire ne sera demandé.
+
+      <br><br>
+
+      Si le coupon de cote 2 n'est pas
+      validé, vous pouvez réclamer
+      un remboursement de
+      <strong>
+        500 F
+      </strong>.
+
+    </div>
+
+
+    <div class="notice">
+
+      <strong>
+        Cote 10
+      </strong>
+
+      <br><br>
+
+      Délai indicatif :
+      <strong>
+        7 à 8 minutes
+      </strong>.
+
+      <br><br>
+
+      Pour une analyse de cote 10,
+      aucun remboursement n'est prévu
+      après le gain ou la perte du pari.
+
+    </div>
+
+
+    <p class="muted">
+
+      Le paiement de l'analyse est de
+      <strong>
+        1 000 F
+      </strong>.
+
+    </p>
+
+  </div>
 
 
   <button
-    class="btn primary"
+    class="btn danger"
     type="button"
-    onclick="sendMatchScreenshot()"
+    onclick="logout()"
   >
-    📸 Envoyer la capture des matchs
+    Se déconnecter
   </button>
 
-
-  <div
-    id="analysisStatus"
-    class="status"
-  ></div>
-
-</div>
+</section>
 
 
 <!-- =====================================================
-     WHATSAPP / TELEGRAM
+     ADMINISTRATION
 ===================================================== -->
 
-<div class="card">
-
-  <h2>
-    📲 Envoyer votre capture
-  </h2>
-
-
-  <p class="muted">
-
-    Après votre paiement,
-    envoyez votre capture de matchs
-    à S-Drive pour analyse.
-
-  </p>
-
-
-  <a
-    class="btn green"
-    href="${whatsappLink(WHATSAPP_MESSAGE) || "#"}"
-    target="_blank"
-    rel="noopener noreferrer"
-  >
-    🟢 WhatsApp — Envoyer ma capture
-  </a>
-
-
-  <a
-    class="btn secondary"
-    href="${telegramLink(TELEGRAM_MESSAGE)}"
-    target="_blank"
-    rel="noopener noreferrer"
-  >
-    🔵 Telegram — Envoyer ma capture
-  </a>
-
-
-  <div class="notice">
-
-    <strong>
-      Message automatique
-    </strong>
-
-    <br><br>
-
-    Lorsque vous ouvrez WhatsApp,
-    le message de demande d'analyse
-    sera automatiquement préparé.
-
-  </div>
-
-</div>
-
-
-<!-- =====================================================
-     BOOKMAKERS
-===================================================== -->
-
-<div class="card">
-
-  <h2>
-    🎯 Bookmakers
-  </h2>
-
-
-  <p class="muted">
-    Retrouvez nos différents bookmakers.
-  </p>
-
-
-  <div class="bookmaker">
-
-    <div class="bookmaker-info">
-
-      <div class="bookmaker-icon">
-        1
-      </div>
-
-      <div>
-        <div class="bookmaker-name">
-          1Win
-        </div>
-
-        <small class="muted">
-          Bookmaker
-        </small>
-      </div>
-
-    </div>
-
-
-    <a
-      class="btn primary bookmaker-button"
-      href="${WIN1_URL}"
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      Ouvrir
-    </a>
-
-  </div>
-
-
-  <div class="bookmaker">
-
-    <div class="bookmaker-info">
-
-      <div class="bookmaker-icon">
-        🎲
-      </div>
-
-      <div>
-        <div class="bookmaker-name">
-          Paripesa
-        </div>
-
-        <small class="muted">
-          Bookmaker
-        </small>
-      </div>
-
-    </div>
-
-
-    <a
-      class="btn primary bookmaker-button"
-      href="${PARIPESA_URL}"
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      Ouvrir
-    </a>
-
-  </div>
-
-
-  <div class="bookmaker">
-
-    <div class="bookmaker-info">
-
-      <div class="bookmaker-icon">
-        🎟️
-      </div>
-
-      <div>
-        <div class="bookmaker-name">
-          Loto
-        </div>
-
-        <small class="muted">
-          Bookmaker
-        </small>
-      </div>
-
-    </div>
-
-
-    <a
-      class="btn primary bookmaker-button"
-      href="${LOTO_URL}"
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      Ouvrir
-    </a>
-
-  </div>
-
-</div>
-
-
-<!-- =====================================================
-     COMMUNAUTÉ
-===================================================== -->
-
-<div class="card">
-
-  <h2>
-    👥 Communauté S-Drive
-  </h2>
-
-
-  <p class="muted">
-
-    Rejoignez notre communauté
-    pour recevoir les informations
-    et échanger avec les membres.
-
-  </p>
-
-
-  <a
-    class="btn primary"
-    href="${WHATSAPP_GROUP_URL}"
-    target="_blank"
-    rel="noopener noreferrer"
-  >
-    🟢 Groupe WhatsApp
-  </a>
-
-
-  <a
-    class="btn secondary"
-    href="${TELEGRAM_GROUP_URL}"
-    target="_blank"
-    rel="noopener noreferrer"
-  >
-    🔵 Groupe Telegram
-  </a>
-
-</div>
-
-
-<!-- =====================================================
-     RÉSEAUX SOCIAUX
-===================================================== -->
-
-<div class="card">
-
-  <h2>
-    🌐 Nos réseaux
-  </h2>
-
-
-  <a
-    class="btn secondary"
-    href="${TIKTOK_URL}"
-    target="_blank"
-    rel="noopener noreferrer"
-  >
-    🎵 TikTok
-  </a>
-
-
-  <a
-    class="btn secondary"
-    href="${FACEBOOK_URL}"
-    target="_blank"
-    rel="noopener noreferrer"
-  >
-    📘 Facebook
-  </a>
-
-</div>
-
-
-<!-- =====================================================
-     PARTAGE
-===================================================== -->
-
-<div class="card">
-
-  <h2>
-    📤 Partager S-Drive
-  </h2>
-
-
-  <p class="muted">
-    Invitez vos amis à découvrir S-Drive.
-  </p>
-
-
-  <div class="share-box">
-
-    <button
-      class="btn secondary"
-      onclick="copyAppLink()"
-    >
-      📋 Copier le lien
-    </button>
-
-
-    <button
-      class="btn secondary"
-      onclick="shareApp()"
-    >
-      📤 Partager
-    </button>
-
-  </div>
-
-
-  <div
-    id="shareStatus"
-    class="status"
-  ></div>
-
-</div>
-
-
-<!-- =====================================================
-     CONDITIONS
-===================================================== -->
-
-<div class="card">
-
-  <h2>
-    📋 Conditions d'utilisation
-  </h2>
-
-
-  <div class="notice">
-
-    <strong>
-      Cote 2
-    </strong>
-
-    <br><br>
-
-    Après paiement et réception
-    de votre capture, S-Drive analyse
-    vos matchs de cote 2.
-
-    <br><br>
-
-    Délai indicatif :
-    <strong>
-      2 à 3 minutes
-    </strong>.
-
-    <br><br>
-
-    Si le coupon de cote 2 analysé
-    et envoyé par S-Drive est validé
-    après votre pari, aucun montant
-    supplémentaire ne sera demandé.
-
-    <br><br>
-
-    Si le coupon de cote 2 n'est pas
-    validé, vous pouvez réclamer
-    un remboursement de
-    <strong>
-      500 F
-    </strong>.
-
-  </div>
-
-
-  <div class="notice">
-
-    <strong>
-      Cote 10
-    </strong>
-
-    <br><br>
-
-    Délai indicatif :
-    <strong>
-      7 à 8 minutes
-    </strong>.
-
-    <br><br>
-
-    Pour une analyse de cote 10,
-    aucun remboursement n'est prévu
-    après le gain ou la perte du pari.
-
-  </div>
-
-
-  <p class="muted">
-
-    Le paiement de l'analyse est de
-    <strong>
-      1 000 F
-    </strong>.
-
-  </p>
-
-</div>
-
-
-<!-- DÉCONNEXION -->
-
-<button
-  class="btn danger"
-  onclick="logout()"
+<section
+  id="admin"
+  class="hidden"
 >
-  🚪 Se déconnecter
-</button>
 
+  <div class="center">
+
+    <div class="logo">
+      🛠️
+    </div>
+
+    <h1>
+      Administration
+    </h1>
+
+    <p class="muted">
+      Gestion S-Drive
+    </p>
+
+  </div>
+
+
+  <div class="card">
+
+    <h2>
+      Connexion administrateur
+    </h2>
+
+
+    <input
+      id="adminPhone"
+      type="tel"
+      placeholder="Téléphone administrateur"
+    >
+
+
+    <input
+      id="adminPassword"
+      type="password"
+      placeholder="Mot de passe administrateur"
+    >
+
+
+    <button
+      class="btn primary"
+      type="button"
+      onclick="adminLogin()"
+    >
+      Accéder
+    </button>
+
+
+    <div
+      id="adminLoginStatus"
+      class="status"
+    ></div>
+
+  </div>
+
+
+  <div class="card">
+
+    <h2>
+      Clients inscrits
+    </h2>
+
+
+    <div
+      id="adminStats"
+      class="notice"
+    >
+      Chargement...
+    </div>
+
+
+    <div
+      id="usersList"
+    ></div>
+
+  </div>
+
+
+  <div class="card">
+
+    <h2>
+      Demandes de mot de passe
+    </h2>
+
+
+    <div
+      id="resetList"
+    >
+      Chargement...
+    </div>
+
+  </div>
+
+
+  <button
+    class="btn danger"
+    type="button"
+    onclick="adminLogout()"
+  >
+    Quitter l'administration
+  </button>
 
 </section>
 
 
 <footer>
-
   S-Drive — Analyse des matchs
-
 </footer>
 
 
@@ -2256,17 +2230,14 @@ footer {
 <script>
 
 /* =====================================================
-   VARIABLES JAVASCRIPT
+   VARIABLES
 ===================================================== */
 
 let selectedOdds = 2;
 
-const initialUser =
-  ${initialUser};
-
 
 /* =====================================================
-   UTILITAIRES
+   STATUS
 ===================================================== */
 
 function showStatus(
@@ -2278,16 +2249,21 @@ function showStatus(
   const element =
     document.getElementById(id);
 
-  if (!element) return;
+  if (!element) {
+    return;
+  }
 
   element.textContent =
     message;
 
   element.className =
     "status " + type;
-
 }
 
+
+/* =====================================================
+   CHARGEMENT BOUTON
+===================================================== */
 
 function setLoading(
   id,
@@ -2298,7 +2274,9 @@ function setLoading(
   const button =
     document.getElementById(id);
 
-  if (!button) return;
+  if (!button) {
+    return;
+  }
 
   button.disabled =
     loading;
@@ -2307,7 +2285,6 @@ function setLoading(
     loading
       ? "Patientez..."
       : text;
-
 }
 
 
@@ -2323,10 +2300,13 @@ function togglePassword(
   const input =
     document.getElementById(id);
 
-  if (!input) return;
+  if (!input) {
+    return;
+  }
 
-
-  if (input.type === "password") {
+  if (
+    input.type === "password"
+  ) {
 
     input.type = "text";
 
@@ -2346,10 +2326,51 @@ function togglePassword(
 
 
 /* =====================================================
-   AFFICHER LE DASHBOARD
+   CHOIX COTE
 ===================================================== */
 
-function showDashboard(user) {
+function selectOdds(type) {
+
+  if (
+    type !== 2 &&
+    type !== 10
+  ) {
+
+    return;
+
+  }
+
+  selectedOdds =
+    type;
+
+
+  document
+    .getElementById("choice2")
+    .classList
+    .toggle(
+      "selected",
+      type === 2
+    );
+
+
+  document
+    .getElementById("choice10")
+    .classList
+    .toggle(
+      "selected",
+      type === 10
+    );
+
+}
+
+
+/* =====================================================
+   DASHBOARD
+===================================================== */
+
+function showDashboard(
+  user
+) {
 
   document
     .getElementById("auth")
@@ -2365,74 +2386,52 @@ function showDashboard(user) {
 
   if (user) {
 
-    document
-      .getElementById("welcomeText")
-      .textContent =
+    const welcome =
+      document.getElementById(
+        "welcomeText"
+      );
+
+    if (welcome) {
+
+      welcome.textContent =
         "Bienvenue " +
-        user.username;
+        user.name;
+
+    }
 
 
-    document
-      .getElementById("userBox")
-      .innerHTML =
+    const userBox =
+      document.getElementById(
+        "userBox"
+      );
+
+    if (userBox) {
+
+      userBox.innerHTML =
         "👤 <strong>" +
-        escapeHtml(user.username) +
+        escapeHtml(user.name) +
         "</strong><br>" +
-        "<span class='muted'>Compte connecté</span><br>" +
-        "🏅 <strong>Membre S-Drive</strong>";
+
+        "<span class=\"muted\">" +
+        escapeHtml(user.phone) +
+        "</span><br>" +
+
+        "🏅 <strong>" +
+        escapeHtml(
+          user.badge ||
+          "Membre S-Drive"
+        ) +
+        "</strong>";
+
+    }
 
   }
 
 
-  showLoadingScreen(
-    "Ouverture de S-Drive..."
-  );
-
-}
-
-
-/* =====================================================
-   ÉCRAN DE CHARGEMENT
-===================================================== */
-
-function showLoadingScreen(
-  text
-) {
-
-  const screen =
-    document.getElementById(
-      "loadingScreen"
-    );
-
-  if (!screen) return;
-
-
-  const textElement =
-    screen.querySelector(
-      ".loading-text"
-    );
-
-
-  if (textElement && text) {
-
-    textElement.textContent =
-      text;
-
-  }
-
-
-  screen.classList.remove(
-    "hidden-loading"
-  );
-
-
-  setTimeout(() => {
-
-    screen.classList.add(
-      "hidden-loading"
-    );
-
-  }, 900);
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
+  });
 
 }
 
@@ -2443,10 +2442,19 @@ function showLoadingScreen(
 
 async function register() {
 
-  const username =
+  const name =
     document
       .getElementById(
-        "registerUsername"
+        "registerName"
+      )
+      .value
+      .trim();
+
+
+  const phone =
+    document
+      .getElementById(
+        "registerPhone"
       )
       .value
       .trim();
@@ -2474,22 +2482,22 @@ async function register() {
   );
 
 
-  if (!username) {
+  if (!name) {
 
     return showStatus(
       "registerStatus",
-      "Veuillez entrer un nom d'utilisateur.",
+      "Veuillez entrer votre nom d’utilisateur.",
       "error"
     );
 
   }
 
 
-  if (username.length < 3) {
+  if (!phone) {
 
     return showStatus(
       "registerStatus",
-      "Le nom d'utilisateur doit contenir au moins 3 caractères.",
+      "Veuillez entrer votre numéro WhatsApp.",
       "error"
     );
 
@@ -2497,21 +2505,8 @@ async function register() {
 
 
   if (
-    !/^[a-zA-Z0-9_.-]+$/.test(
-      username
-    )
+    password.length < 6
   ) {
-
-    return showStatus(
-      "registerStatus",
-      "Utilisez uniquement des lettres, chiffres, _ , . ou -.",
-      "error"
-    );
-
-  }
-
-
-  if (password.length < 6) {
 
     return showStatus(
       "registerStatus",
@@ -2522,7 +2517,9 @@ async function register() {
   }
 
 
-  if (password !== password2) {
+  if (
+    password !== password2
+  ) {
 
     return showStatus(
       "registerStatus",
@@ -2558,7 +2555,8 @@ async function register() {
 
           body:
             JSON.stringify({
-              username,
+              name,
+              phone,
               password
             })
         }
@@ -2575,30 +2573,31 @@ async function register() {
 
     if (!response.ok) {
 
-      return showStatus(
+      showStatus(
         "registerStatus",
         data.error ||
           "Erreur lors de l'inscription.",
         "error"
       );
 
+      return;
+
     }
 
 
     showStatus(
       "registerStatus",
-      "Compte créé avec succès !",
+      "Compte créé avec succès 🏅",
       "success"
     );
 
 
-    setTimeout(() => {
-
-      showDashboard(
-        data.user
-      );
-
-    }, 400);
+    setTimeout(
+      () => {
+        location.reload();
+      },
+      500
+    );
 
 
   } catch (error) {
@@ -2611,15 +2610,14 @@ async function register() {
       "error"
     );
 
-  } finally {
-
-    setLoading(
-      "registerButton",
-      false,
-      "Créer mon compte"
-    );
-
   }
+
+
+  setLoading(
+    "registerButton",
+    false,
+    "Créer mon compte"
+  );
 
 }
 
@@ -2630,10 +2628,10 @@ async function register() {
 
 async function login() {
 
-  const username =
+  const phone =
     document
       .getElementById(
-        "loginUsername"
+        "loginPhone"
       )
       .value
       .trim();
@@ -2654,7 +2652,7 @@ async function login() {
 
 
   if (
-    !username ||
+    !phone ||
     !password
   ) {
 
@@ -2692,7 +2690,7 @@ async function login() {
 
           body:
             JSON.stringify({
-              username,
+              phone,
               password
             })
         }
@@ -2709,30 +2707,31 @@ async function login() {
 
     if (!response.ok) {
 
-      return showStatus(
+      showStatus(
         "loginStatus",
         data.error ||
-          "Nom d'utilisateur ou mot de passe incorrect.",
+          "Numéro ou mot de passe incorrect.",
         "error"
       );
+
+      return;
 
     }
 
 
     showStatus(
       "loginStatus",
-      "Connexion réussie !",
+      "Connexion réussie.",
       "success"
     );
 
 
-    setTimeout(() => {
-
-      showDashboard(
-        data.user
-      );
-
-    }, 300);
+    setTimeout(
+      () => {
+        location.reload();
+      },
+      300
+    );
 
 
   } catch (error) {
@@ -2745,15 +2744,14 @@ async function login() {
       "error"
     );
 
-  } finally {
-
-    setLoading(
-      "loginButton",
-      false,
-      "Se connecter"
-    );
-
   }
+
+
+  setLoading(
+    "loginButton",
+    false,
+    "Se connecter"
+  );
 
 }
 
@@ -2764,33 +2762,24 @@ async function login() {
 
 async function forgotPassword() {
 
-  const username =
+  const phone =
     document
       .getElementById(
-        "loginUsername"
+        "loginPhone"
       )
       .value
       .trim();
 
 
-  if (!username) {
+  if (!phone) {
 
-    showStatus(
+    return showStatus(
       "loginStatus",
-      "Entrez d'abord votre nom d'utilisateur.",
+      "Entrez d’abord votre numéro WhatsApp.",
       "error"
     );
 
-    return;
-
   }
-
-
-  showStatus(
-    "loginStatus",
-    "Création de votre demande...",
-    ""
-  );
 
 
   try {
@@ -2806,9 +2795,12 @@ async function forgotPassword() {
               "application/json"
           },
 
+          credentials:
+            "same-origin",
+
           body:
             JSON.stringify({
-              username
+              phone
             })
         }
       );
@@ -2816,144 +2808,39 @@ async function forgotPassword() {
 
     const data =
       await response
-        .json()
-        .catch(
-          () => ({})
-        );
-
-
-    if (!response.ok) {
-
-      return showStatus(
-        "loginStatus",
-        data.error ||
-          "Impossible de créer la demande.",
-        "error"
-      );
-
-    }
+        .json();
 
 
     showStatus(
       "loginStatus",
-      "Demande envoyée. Contactez S-Drive sur WhatsApp pour récupérer votre compte.",
+      data.message ||
+        data.error ||
+        "Demande envoyée.",
       "success"
     );
 
 
-    if (data.whatsapp_url) {
+    if (
+      data.whatsapp_url
+    ) {
 
-      setTimeout(() => {
-
-        window.open(
-          data.whatsapp_url,
-          "_blank"
-        );
-
-      }, 500);
+      window.open(
+        data.whatsapp_url,
+        "_blank"
+      );
 
     }
 
 
   } catch (error) {
 
-    console.error(error);
-
     showStatus(
       "loginStatus",
-      "Erreur de connexion au serveur.",
+      "Impossible d’envoyer la demande.",
       "error"
     );
 
   }
-
-}
-
-
-/* =====================================================
-   SESSION
-===================================================== */
-
-async function checkSession() {
-
-  try {
-
-    const response =
-      await fetch(
-        "/api/me",
-        {
-          credentials:
-            "same-origin"
-        }
-      );
-
-
-    if (!response.ok) {
-      return;
-    }
-
-
-    const data =
-      await response.json();
-
-
-    if (
-      data.success &&
-      data.user
-    ) {
-
-      showDashboard(
-        data.user
-      );
-
-    }
-
-  } catch (error) {
-
-    console.error(
-      "Session:",
-      error
-    );
-
-  }
-
-}
-
-
-/* =====================================================
-   CHOIX COTE
-===================================================== */
-
-function selectOdds(type) {
-
-  if (
-    type !== 2 &&
-    type !== 10
-  ) {
-    return;
-  }
-
-
-  selectedOdds =
-    type;
-
-
-  document
-    .getElementById("choice2")
-    .classList
-    .toggle(
-      "selected",
-      type === 2
-    );
-
-
-  document
-    .getElementById("choice10")
-    .classList
-    .toggle(
-      "selected",
-      type === 10
-    );
 
 }
 
@@ -2972,10 +2859,6 @@ async function sendMatchScreenshot() {
 
   status.textContent =
     "Préparation de votre demande...";
-
-
-  status.className =
-    "status";
 
 
   try {
@@ -3026,13 +2909,15 @@ async function sendMatchScreenshot() {
 
 
     status.textContent =
-      "Demande créée. Ouverture de WhatsApp...";
+      "Demande créée. Envoyez maintenant votre capture sur WhatsApp ou Telegram.";
 
     status.className =
       "status success";
 
 
-    if (data.whatsapp_url) {
+    if (
+      data.whatsapp_url
+    ) {
 
       window.open(
         data.whatsapp_url,
@@ -3040,6 +2925,7 @@ async function sendMatchScreenshot() {
       );
 
     }
+
 
   } catch (error) {
 
@@ -3064,14 +2950,15 @@ async function copyAppLink() {
 
   try {
 
-    await navigator.clipboard.writeText(
-      window.location.origin
-    );
+    await navigator.clipboard
+      .writeText(
+        window.location.origin
+      );
 
 
     showStatus(
       "shareStatus",
-      "Lien copié avec succès !",
+      "Lien copié avec succès.",
       "success"
     );
 
@@ -3095,24 +2982,29 @@ async function copyAppLink() {
 
 async function shareApp() {
 
+  const shareData = {
+
+    title:
+      "S-Drive",
+
+    text:
+      "Découvrez S-Drive — Analyse professionnelle de vos matchs.",
+
+    url:
+      window.location.origin
+
+  };
+
+
   try {
 
     if (
       navigator.share
     ) {
 
-      await navigator.share({
-
-        title:
-          "S-Drive",
-
-        text:
-          "Découvrez S-Drive — Analyse des matchs.",
-
-        url:
-          window.location.origin
-
-      });
+      await navigator.share(
+        shareData
+      );
 
     } else {
 
@@ -3120,7 +3012,10 @@ async function shareApp() {
 
     }
 
-  } catch (error) {}
+  } catch (error) {
+
+    // Annulation du partage
+  }
 
 }
 
@@ -3136,18 +3031,428 @@ async function logout() {
     await fetch(
       "/api/logout",
       {
-        method:
-          "POST",
-
-        credentials:
-          "same-origin"
+        method: "POST",
+        credentials: "same-origin"
       }
     );
 
   } catch (error) {}
 
+  location.reload();
+
+}
+
+
+/* =====================================================
+   ADMIN LOGIN
+===================================================== */
+
+async function adminLogin() {
+
+  const phone =
+    document
+      .getElementById(
+        "adminPhone"
+      )
+      .value
+      .trim();
+
+
+  const password =
+    document
+      .getElementById(
+        "adminPassword"
+      )
+      .value;
+
+
+  if (
+    !phone ||
+    !password
+  ) {
+
+    return showStatus(
+      "adminLoginStatus",
+      "Remplissez tous les champs.",
+      "error"
+    );
+
+  }
+
+
+  try {
+
+    const response =
+      await fetch(
+        "/api/admin/login",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+
+          credentials:
+            "same-origin",
+
+          body:
+            JSON.stringify({
+              phone,
+              password
+            })
+        }
+      );
+
+
+    const data =
+      await response
+        .json()
+        .catch(
+          () => ({})
+        );
+
+
+    if (!response.ok) {
+
+      return showStatus(
+        "adminLoginStatus",
+        data.error ||
+          "Accès refusé.",
+        "error"
+      );
+
+    }
+
+
+    loadAdmin();
+
+
+  } catch (error) {
+
+    showStatus(
+      "adminLoginStatus",
+      "Erreur serveur.",
+      "error"
+    );
+
+  }
+
+}
+
+
+/* =====================================================
+   CHARGER ADMIN
+===================================================== */
+
+async function loadAdmin() {
+
+  document
+    .getElementById(
+      "auth"
+    )
+    .classList
+    .add("hidden");
+
+
+  document
+    .getElementById(
+      "dashboard"
+    )
+    .classList
+    .add("hidden");
+
+
+  document
+    .getElementById(
+      "admin"
+    )
+    .classList
+    .remove("hidden");
+
+
+  try {
+
+    const response =
+      await fetch(
+        "/api/admin/users",
+        {
+          credentials:
+            "same-origin"
+        }
+      );
+
+
+    const data =
+      await response.json();
+
+
+    if (!response.ok) {
+
+      return;
+
+    }
+
+
+    document
+      .getElementById(
+        "adminStats"
+      )
+      .textContent =
+      "Nombre total de clients : " +
+      data.users.length;
+
+
+    document
+      .getElementById(
+        "usersList"
+      )
+      .innerHTML =
+      data.users
+        .map(
+          (user) => `
+
+            <div class="notice">
+
+              <strong>
+                ${escapeHtml(user.name)}
+              </strong>
+
+              <br>
+
+              ${escapeHtml(user.phone)}
+
+              <br><br>
+
+              <span class="badge">
+                🏅
+                ${escapeHtml(
+                  user.badge
+                )}
+              </span>
+
+            </div>
+
+          `
+        )
+        .join("") ||
+      '<p class="muted">Aucun client.</p>';
+
+
+    const resetResponse =
+      await fetch(
+        "/api/admin/reset-requests",
+        {
+          credentials:
+            "same-origin"
+        }
+      );
+
+
+    const resetData =
+      await resetResponse.json();
+
+
+    document
+      .getElementById(
+        "resetList"
+      )
+      .innerHTML =
+      resetData.requests
+        .map(
+          (request) => `
+
+            <div class="notice">
+
+              <strong>
+                ${escapeHtml(
+                  request.name
+                )}
+              </strong>
+
+              <br>
+
+              ${escapeHtml(
+                request.phone
+              )}
+
+              <br>
+
+              <button
+                class="btn green"
+                onclick="resolveReset(${request.id})"
+              >
+                Envoyer une réinitialisation
+              </button>
+
+            </div>
+
+          `
+        )
+        .join("") ||
+      '<p class="muted">Aucune demande en attente.</p>';
+
+
+  } catch (error) {
+
+    console.error(
+      "ADMIN:",
+      error
+    );
+
+  }
+
+}
+
+
+/* =====================================================
+   RÉINITIALISATION ADMIN
+===================================================== */
+
+async function resolveReset(id) {
+
+  try {
+
+    const response =
+      await fetch(
+        "/api/admin/reset/" +
+          id,
+        {
+          method: "POST",
+
+          credentials:
+            "same-origin"
+        }
+      );
+
+
+    const data =
+      await response.json();
+
+
+    alert(
+      data.message ||
+      data.error ||
+      "Opération terminée."
+    );
+
+
+    loadAdmin();
+
+
+  } catch (error) {
+
+    alert(
+      "Impossible de traiter la demande."
+    );
+
+  }
+
+}
+
+
+/* =====================================================
+   ADMIN LOGOUT
+===================================================== */
+
+async function adminLogout() {
+
+  try {
+
+    await fetch(
+      "/api/admin/logout",
+      {
+        method: "POST",
+        credentials: "same-origin"
+      }
+    );
+
+  } catch (error) {}
 
   location.reload();
+
+}
+
+
+/* =====================================================
+   OUVRIR ADMIN
+===================================================== */
+
+function openAdmin() {
+
+  document
+    .getElementById(
+      "auth"
+    )
+    .classList
+    .add("hidden");
+
+
+  document
+    .getElementById(
+      "dashboard"
+    )
+    .classList
+    .add("hidden");
+
+
+  document
+    .getElementById(
+      "admin"
+    )
+    .classList
+    .remove("hidden");
+
+}
+
+
+/* =====================================================
+   SESSION
+===================================================== */
+
+async function checkSession() {
+
+  try {
+
+    const response =
+      await fetch(
+        "/api/me",
+        {
+          credentials:
+            "same-origin"
+        }
+      );
+
+
+    if (
+      response.ok
+    ) {
+
+      const data =
+        await response.json();
+
+
+      if (
+        data.success &&
+        data.user
+      ) {
+
+        showDashboard(
+          data.user
+        );
+
+      }
+
+    }
+
+  } catch (error) {
+
+    console.error(
+      "SESSION:",
+      error
+    );
+
+  }
 
 }
 
@@ -3160,36 +3465,12 @@ document.addEventListener(
   "DOMContentLoaded",
   () => {
 
-    /*
-      On laisse l'écran de chargement
-      apparaître brièvement au démarrage.
-    */
-
-    setTimeout(() => {
-
-      const screen =
-        document.getElementById(
-          "loadingScreen"
-        );
-
-      if (screen) {
-
-        screen.classList.add(
-          "hidden-loading"
-        );
-
-      }
-
-    }, 800);
-
-
     checkSession();
 
   }
 );
 
 </script>
-
 
 </body>
 
@@ -3199,7 +3480,7 @@ document.addEventListener(
 
 
 /* =========================================================
-   API INSCRIPTION
+   API — INSCRIPTION
 ========================================================= */
 
 app.post(
@@ -3208,12 +3489,16 @@ app.post(
 
     try {
 
-      const username =
+      const name =
         String(
-          req.body.username || ""
-        )
-          .trim()
-          .toLowerCase();
+          req.body.name || ""
+        ).trim();
+
+
+      const phone =
+        normalizePhone(
+          req.body.phone
+        );
 
 
       const password =
@@ -3222,86 +3507,76 @@ app.post(
         );
 
 
-      if (!username) {
+      if (!name) {
 
-        return res.status(400).json({
+        return res
+          .status(400)
+          .json({
 
-          success: false,
+            success: false,
 
-          error:
-            "Veuillez entrer un nom d'utilisateur."
+            error:
+              "Veuillez entrer votre nom d’utilisateur."
 
-        });
+          });
 
       }
 
 
-      if (username.length < 3) {
+      if (!phone) {
 
-        return res.status(400).json({
+        return res
+          .status(400)
+          .json({
 
-          success: false,
+            success: false,
 
-          error:
-            "Le nom d'utilisateur doit contenir au moins 3 caractères."
+            error:
+              "Veuillez entrer votre numéro WhatsApp."
 
-        });
+          });
 
       }
 
 
       if (
-        !/^[a-zA-Z0-9_.-]+$/.test(
-          username
-        )
+        password.length < 6
       ) {
 
-        return res.status(400).json({
+        return res
+          .status(400)
+          .json({
 
-          success: false,
+            success: false,
 
-          error:
-            "Le nom d'utilisateur contient des caractères non autorisés."
+            error:
+              "Le mot de passe doit contenir au moins 6 caractères."
 
-        });
-
-      }
-
-
-      if (password.length < 6) {
-
-        return res.status(400).json({
-
-          success: false,
-
-          error:
-            "Le mot de passe doit contenir au moins 6 caractères."
-
-        });
+          });
 
       }
 
 
-      const exists =
+      const existing =
         db
           .prepare(
-            "SELECT id FROM users WHERE username = ?"
+            "SELECT id FROM users WHERE phone = ?"
           )
-          .get(
-            username
-          );
+          .get(phone);
 
 
-      if (exists) {
+      if (existing) {
 
-        return res.status(409).json({
+        return res
+          .status(409)
+          .json({
 
-          success: false,
+            success: false,
 
-          error:
-            "Ce nom d'utilisateur existe déjà. Choisissez-en un autre."
+            error:
+              "Ce numéro est déjà enregistré. Connectez-vous."
 
-        });
+          });
 
       }
 
@@ -3315,15 +3590,15 @@ app.post(
 
       const result =
         db
-          .prepare(
-            `INSERT INTO users
-             (username, name, phone, password_hash, badge)
-             VALUES (?, ?, ?, ?, ?)`
-          )
+          .prepare(`
+            INSERT INTO users
+              (name, phone, password_hash, badge)
+            VALUES
+              (?, ?, ?, ?)
+          `)
           .run(
-            username,
-            username,
-            null,
+            name,
+            phone,
             hash,
             "Membre S-Drive"
           );
@@ -3335,32 +3610,32 @@ app.post(
         );
 
 
-      res.status(201).json({
+      res
+        .status(201)
+        .json({
 
-        success: true,
+          success: true,
 
-        message:
-          "Compte créé avec succès.",
+          message:
+            "Compte créé avec succès.",
 
-        user: {
+          user: {
 
-          id:
-            Number(
-              result.lastInsertRowid
-            ),
+            id:
+              Number(
+                result.lastInsertRowid
+              ),
 
-          username:
-            username,
+            name,
 
-          name:
-            username,
+            phone,
 
-          badge:
-            "Membre S-Drive"
+            badge:
+              "Membre S-Drive"
 
-        }
+          }
 
-      });
+        });
 
 
     } catch (error) {
@@ -3371,14 +3646,16 @@ app.post(
       );
 
 
-      res.status(500).json({
+      res
+        .status(500)
+        .json({
 
-        success: false,
+          success: false,
 
-        error:
-          "Erreur serveur lors de la création du compte."
+          error:
+            "Erreur serveur lors de la création du compte."
 
-      });
+        });
 
     }
 
@@ -3387,7 +3664,7 @@ app.post(
 
 
 /* =========================================================
-   API CONNEXION
+   API — CONNEXION
 ========================================================= */
 
 app.post(
@@ -3396,12 +3673,10 @@ app.post(
 
     try {
 
-      const username =
-        String(
-          req.body.username || ""
-        )
-          .trim()
-          .toLowerCase();
+      const phone =
+        normalizePhone(
+          req.body.phone
+        );
 
 
       const password =
@@ -3411,26 +3686,28 @@ app.post(
 
 
       if (
-        !username ||
+        !phone ||
         !password
       ) {
 
-        return res.status(400).json({
+        return res
+          .status(400)
+          .json({
 
-          success: false,
+            success: false,
 
-          error:
-            "Veuillez remplir tous les champs."
+            error:
+              "Veuillez remplir tous les champs."
 
-        });
+          });
 
       }
 
 
       const user =
         db
-          .prepare(
-            `SELECT
+          .prepare(`
+            SELECT
               id,
               username,
               name,
@@ -3438,24 +3715,24 @@ app.post(
               password_hash,
               badge,
               created_at
-             FROM users
-             WHERE username = ?`
-          )
-          .get(
-            username
-          );
+            FROM users
+            WHERE phone = ?
+          `)
+          .get(phone);
 
 
       if (!user) {
 
-        return res.status(401).json({
+        return res
+          .status(401)
+          .json({
 
-          success: false,
+            success: false,
 
-          error:
-            "Nom d'utilisateur ou mot de passe incorrect."
+            error:
+              "Numéro ou mot de passe incorrect."
 
-        });
+          });
 
       }
 
@@ -3469,14 +3746,16 @@ app.post(
 
       if (!valid) {
 
-        return res.status(401).json({
+        return res
+          .status(401)
+          .json({
 
-          success: false,
+            success: false,
 
-          error:
-            "Nom d'utilisateur ou mot de passe incorrect."
+            error:
+              "Numéro ou mot de passe incorrect."
 
-        });
+          });
 
       }
 
@@ -3503,6 +3782,9 @@ app.post(
           name:
             user.name,
 
+          phone:
+            user.phone,
+
           badge:
             user.badge
 
@@ -3519,14 +3801,16 @@ app.post(
       );
 
 
-      res.status(500).json({
+      res
+        .status(500)
+        .json({
 
-        success: false,
+          success: false,
 
-        error:
-          "Erreur serveur lors de la connexion."
+          error:
+            "Erreur serveur."
 
-      });
+        });
 
     }
 
@@ -3535,7 +3819,7 @@ app.post(
 
 
 /* =========================================================
-   API UTILISATEUR
+   API — UTILISATEUR CONNECTÉ
 ========================================================= */
 
 app.get(
@@ -3548,14 +3832,16 @@ app.get(
 
     if (!user) {
 
-      return res.status(401).json({
+      return res
+        .status(401)
+        .json({
 
-        success: false,
+          success: false,
 
-        error:
-          "Utilisateur non connecté."
+          error:
+            "Utilisateur non connecté."
 
-      });
+        });
 
     }
 
@@ -3573,7 +3859,7 @@ app.get(
 
 
 /* =========================================================
-   API DÉCONNEXION
+   API — DÉCONNEXION
 ========================================================= */
 
 app.post(
@@ -3585,14 +3871,16 @@ app.post(
 
         if (error) {
 
-          return res.status(500).json({
+          return res
+            .status(500)
+            .json({
 
-            success: false,
+              success: false,
 
-            error:
-              "Impossible de se déconnecter."
+              error:
+                "Impossible de se déconnecter."
 
-          });
+            });
 
         }
 
@@ -3611,7 +3899,7 @@ app.post(
 
 
 /* =========================================================
-   API MOT DE PASSE OUBLIÉ
+   API — MOT DE PASSE OUBLIÉ
 ========================================================= */
 
 app.post(
@@ -3620,85 +3908,77 @@ app.post(
 
     try {
 
-      const username =
-        String(
-          req.body.username || ""
-        )
-          .trim()
-          .toLowerCase();
+      const phone =
+        normalizePhone(
+          req.body.phone
+        );
 
 
-      if (!username) {
+      if (!phone) {
 
-        return res.status(400).json({
+        return res
+          .status(400)
+          .json({
 
-          success: false,
+            success: false,
 
-          error:
-            "Veuillez entrer votre nom d'utilisateur."
+            error:
+              "Entrez votre numéro WhatsApp."
 
-        });
+          });
 
       }
 
 
       const user =
         db
-          .prepare(
-            `SELECT id, username
-             FROM users
-             WHERE username = ?`
-          )
-          .get(
-            username
-          );
+          .prepare(`
+            SELECT
+              id,
+              name,
+              phone
+            FROM users
+            WHERE phone = ?
+          `)
+          .get(phone);
 
 
       if (!user) {
 
-        return res.status(404).json({
+        return res.json({
 
-          success: false,
+          success: true,
 
-          error:
-            "Aucun compte trouvé avec ce nom d'utilisateur."
+          message:
+            "Si ce numéro existe, une demande de réinitialisation a été enregistrée."
 
         });
 
       }
 
 
-      const result =
-        db
-          .prepare(
-            `INSERT INTO password_resets
-             (user_id, status)
-             VALUES (?, 'pending')`
-          )
-          .run(
-            user.id
-          );
+      db
+        .prepare(`
+          INSERT INTO password_resets
+            (user_id, status)
+          VALUES
+            (?, 'pending')
+        `)
+        .run(
+          user.id
+        );
 
 
-      const message = [
-
-        "Bonjour S-Drive 👋",
-
-        "",
-
-        "Je souhaite récupérer mon compte.",
-
-        "",
-
-        "Nom d'utilisateur : " +
-          user.username,
-
-        "",
-
-        "Référence de récupération : SD-RESET-" +
-          result.lastInsertRowid
-
-      ].join("\n");
+      const message =
+        "Bonjour S-Drive 👋\n\n" +
+        "Je demande une réinitialisation de mon mot de passe.\n\n" +
+        "Nom : " +
+        user.name +
+        "\n" +
+        "Téléphone : " +
+        user.phone +
+        "\n\n" +
+        "Merci.";
 
 
       res.json({
@@ -3706,12 +3986,10 @@ app.post(
         success: true,
 
         message:
-          "Demande créée.",
+          "Votre demande a été enregistrée. Contactez l’administrateur pour réinitialiser votre mot de passe.",
 
         whatsapp_url:
-          whatsappLink(
-            message
-          )
+          whatsappLink(message)
 
       });
 
@@ -3719,19 +3997,21 @@ app.post(
     } catch (error) {
 
       console.error(
-        "ERREUR PASSWORD RESET:",
+        "ERREUR FORGOT:",
         error
       );
 
 
-      res.status(500).json({
+      res
+        .status(500)
+        .json({
 
-        success: false,
+          success: false,
 
-        error:
-          "Impossible de créer la demande."
+          error:
+            "Impossible d’enregistrer la demande."
 
-      });
+        });
 
     }
 
@@ -3740,7 +4020,7 @@ app.post(
 
 
 /* =========================================================
-   API CRÉER ANALYSE
+   API — CRÉER UNE ANALYSE
 ========================================================= */
 
 app.post(
@@ -3750,25 +4030,27 @@ app.post(
 
     try {
 
-      const odds =
+      const oddsType =
         Number(
           req.body.odds_type
         );
 
 
       if (
-        odds !== 2 &&
-        odds !== 10
+        oddsType !== 2 &&
+        oddsType !== 10
       ) {
 
-        return res.status(400).json({
+        return res
+          .status(400)
+          .json({
 
-          success: false,
+            success: false,
 
-          error:
-            "Type d'analyse incorrect."
+            error:
+              "Type d’analyse incorrect."
 
-        });
+          });
 
       }
 
@@ -3779,84 +4061,70 @@ app.post(
 
       if (!user) {
 
-        return res.status(401).json({
+        return res
+          .status(401)
+          .json({
 
-          success: false,
+            success: false,
 
-          error:
-            "Session expirée."
+            error:
+              "Session expirée."
 
-        });
+          });
 
       }
 
 
       const result =
         db
-          .prepare(
-            `INSERT INTO analyses
-             (user_id, odds_type, status)
-             VALUES (?, ?, 'payment_pending')`
-          )
+          .prepare(`
+            INSERT INTO analyses
+              (user_id, odds_type, status)
+            VALUES
+              (?, ?, 'payment_pending')
+          `)
           .run(
             user.id,
-            odds
+            oddsType
           );
 
 
       const message = [
-
         "Bonjour S-Drive 👋",
-
         "",
-
-        "Je viens de créer une demande d'analyse.",
-
+        "Je viens de créer une demande d’analyse.",
         "",
-
         "Client : " +
-          user.username,
-
-        "",
-
+          user.name,
+        "Téléphone : " +
+          user.phone,
         "Type : Cote " +
-          odds,
-
-        "",
-
+          oddsType,
         "Référence : SD-" +
           result.lastInsertRowid,
-
         "",
-
         "Je vais envoyer la capture de mes matchs."
-
       ].join("\n");
 
 
-      res.status(201).json({
+      res
+        .status(201)
+        .json({
 
-        success: true,
+          success: true,
 
-        message:
-          "Demande créée avec succès.",
+          message:
+            "Demande créée avec succès.",
 
-        analysis_id:
-          Number(
-            result.lastInsertRowid
-          ),
+          analysis_id:
+            Number(
+              result.lastInsertRowid
+            ),
 
-        whatsapp_url:
-          whatsappLink(
-            message
-          ),
+          whatsapp_url:
+            whatsappLink(message)
 
-        telegram_url:
-          telegramLink(
-            message
-          )
-
-      });
+        });
 
 
     } catch (error) {
@@ -3867,14 +4135,16 @@ app.post(
       );
 
 
-      res.status(500).json({
+      res
+        .status(500)
+        .json({
 
-        success: false,
+          success: false,
 
-        error:
-          "Impossible de créer la demande."
+          error:
+            "Impossible de créer la demande."
 
-      });
+        });
 
     }
 
@@ -3883,7 +4153,329 @@ app.post(
 
 
 /* =========================================================
-   API SANTÉ
+   API — ADMIN LOGIN
+========================================================= */
+
+app.post(
+  "/api/admin/login",
+  (req, res) => {
+
+    const phone =
+      normalizePhone(
+        req.body.phone
+      );
+
+
+    const password =
+      String(
+        req.body.password || ""
+      );
+
+
+    if (
+      !ADMIN_PHONE ||
+      !ADMIN_PASSWORD
+    ) {
+
+      return res
+        .status(503)
+        .json({
+
+          success: false,
+
+          error:
+            "Configurez ADMIN_PHONE et ADMIN_PASSWORD dans Render."
+
+        });
+
+    }
+
+
+    if (
+      phone !==
+        normalizePhone(
+          ADMIN_PHONE
+        ) ||
+      password !==
+        ADMIN_PASSWORD
+    ) {
+
+      return res
+        .status(401)
+        .json({
+
+          success: false,
+
+          error:
+            "Identifiants administrateur incorrects."
+
+        });
+
+    }
+
+
+    req.session.admin =
+      true;
+
+
+    res.json({
+
+      success: true
+
+    });
+
+  }
+);
+
+
+/* =========================================================
+   API — ADMIN LOGOUT
+========================================================= */
+
+app.post(
+  "/api/admin/logout",
+  (req, res) => {
+
+    req.session.admin =
+      false;
+
+
+    res.json({
+
+      success: true
+
+    });
+
+  }
+);
+
+
+/* =========================================================
+   API — LISTE CLIENTS
+========================================================= */
+
+app.get(
+  "/api/admin/users",
+  requireAdmin,
+  (req, res) => {
+
+    const users =
+      db
+        .prepare(`
+          SELECT
+            id,
+            username,
+            name,
+            phone,
+            badge,
+            created_at
+          FROM users
+          ORDER BY id DESC
+        `)
+        .all();
+
+
+    res.json({
+
+      success: true,
+
+      users
+
+    });
+
+  }
+);
+
+
+/* =========================================================
+   API — DEMANDES DE RESET
+========================================================= */
+
+app.get(
+  "/api/admin/reset-requests",
+  requireAdmin,
+  (req, res) => {
+
+    const requests =
+      db
+        .prepare(`
+          SELECT
+            pr.id,
+            pr.user_id,
+            u.name,
+            u.phone,
+            pr.created_at
+          FROM password_resets pr
+          JOIN users u
+            ON u.id = pr.user_id
+          WHERE pr.status = 'pending'
+          ORDER BY pr.id DESC
+        `)
+        .all();
+
+
+    res.json({
+
+      success: true,
+
+      requests
+
+    });
+
+  }
+);
+
+
+/* =========================================================
+   API — RÉINITIALISATION MOT DE PASSE
+========================================================= */
+
+app.post(
+  "/api/admin/reset/:id",
+  requireAdmin,
+  (req, res) => {
+
+    try {
+
+      const request =
+        db
+          .prepare(`
+            SELECT
+              pr.id,
+              pr.user_id,
+              u.name,
+              u.phone
+            FROM password_resets pr
+            JOIN users u
+              ON u.id = pr.user_id
+            WHERE pr.id = ?
+              AND pr.status = 'pending'
+          `)
+          .get(
+            req.params.id
+          );
+
+
+      if (!request) {
+
+        return res
+          .status(404)
+          .json({
+
+            success: false,
+
+            error:
+              "Demande introuvable."
+
+          });
+
+      }
+
+
+      const temporaryPassword =
+        "SD-" +
+        Math.random()
+          .toString(36)
+          .slice(2, 8)
+          .toUpperCase();
+
+
+      const hash =
+        bcrypt.hashSync(
+          temporaryPassword,
+          10
+        );
+
+
+      db
+        .prepare(`
+          UPDATE users
+          SET password_hash = ?
+          WHERE id = ?
+        `)
+        .run(
+          hash,
+          request.user_id
+        );
+
+
+      db
+        .prepare(`
+          UPDATE password_resets
+          SET
+            status = 'resolved',
+            admin_password_hash = ?,
+            resolved_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `)
+        .run(
+          hash,
+          request.id
+        );
+
+
+      const message =
+        "Bonjour " +
+        request.name +
+        ", votre mot de passe temporaire S-Drive est : " +
+        temporaryPassword +
+        ". Connectez-vous puis modifiez-le si vous le souhaitez.";
+
+
+      const whatsapp =
+        whatsappLink(
+          message
+        );
+
+
+      res.json({
+
+        success: true,
+
+        message:
+          "Réinitialisation créée. " +
+          (
+            whatsapp
+              ? "Le bouton WhatsApp peut être utilisé pour transmettre le nouveau mot de passe."
+              : "Configurez WHATSAPP_NUMBER dans Render."
+          ),
+
+        temporary_password:
+          temporaryPassword,
+
+        whatsapp_url:
+          whatsapp
+
+      });
+
+
+    } catch (error) {
+
+      console.error(
+        "ERREUR RESET:",
+        error
+      );
+
+
+      res
+        .status(500)
+        .json({
+
+          success: false,
+
+          error:
+            "Impossible de réinitialiser le mot de passe."
+
+        });
+
+    }
+
+  }
+);
+
+
+/* =========================================================
+   HEALTH CHECK
 ========================================================= */
 
 app.get(
@@ -3917,21 +4509,25 @@ app.use(
       req.path.startsWith("/api/")
     ) {
 
-      return res.status(404).json({
+      return res
+        .status(404)
+        .json({
 
-        success: false,
+          success: false,
 
-        error:
-          "Route API introuvable."
+          error:
+            "Route API introuvable."
 
-      });
+        });
 
     }
 
 
-    res.status(404).send(
-      "Page introuvable."
-    );
+    res
+      .status(404)
+      .send(
+        "Page introuvable."
+      );
 
   }
 );
